@@ -1,0 +1,178 @@
+'use client'
+
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { cn } from '@/lib/utils'
+import { createClient } from '@/lib/supabase/client'
+import {
+  LayoutDashboard,
+  Wallet,
+  CreditCard,
+  Receipt,
+  CalendarCheck,
+  ChevronLeft,
+  ChevronRight,
+  Menu,
+  X,
+  LogOut,
+  FileText,
+} from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Logo } from '@/components/logo'
+
+interface SidebarProps {
+  activeTab: string
+  onTabChange: (tab: string) => void
+  userEmail?: string
+}
+
+const navItems = [
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'accounts', label: 'Cuentas', icon: Wallet },
+  { id: 'subscriptions', label: 'Suscripciones', icon: CalendarCheck },
+  { id: 'cards', label: 'Tarjetas', icon: CreditCard },
+  { id: 'transactions', label: 'Transacciones', icon: Receipt },
+  { id: 'fixed-expenses', label: 'Gastos Fijos', icon: FileText },
+]
+
+export function Sidebar({ activeTab, onTabChange, userEmail }: SidebarProps) {
+  const [collapsed, setCollapsed] = useState(false)
+  const [mobileOpen, setMobileOpen] = useState(false)
+  const router = useRouter()
+
+  const handleLogout = async () => {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    router.push('/auth/login')
+  }
+
+  return (
+    <>
+      {/* Mobile Toggle */}
+      <Button
+        variant="ghost"
+        size="icon"
+        className="fixed top-4 left-4 z-50 md:hidden"
+        onClick={() => setMobileOpen(!mobileOpen)}
+      >
+        {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+      </Button>
+
+      {/* Mobile Overlay */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside
+        className={cn(
+          'fixed left-0 top-0 z-40 h-screen bg-sidebar border-r border-sidebar-border transition-all duration-300',
+          collapsed ? 'w-16' : 'w-64',
+          mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+        )}
+      >
+        <div className="flex flex-col h-full">
+          {/* Logo */}
+          <div className={cn(
+            'flex items-center h-16 px-4 border-b border-sidebar-border',
+            collapsed ? 'justify-center' : 'gap-3'
+          )}>
+<Logo size={32} showText={!collapsed} textClassName="text-lg" />
+          </div>
+
+          {/* Navigation */}
+          <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+            {navItems.map((item) => {
+              const Icon = item.icon
+              const isActive = activeTab === item.id
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    onTabChange(item.id)
+                    setMobileOpen(false)
+                  }}
+                  className={cn(
+                    'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors',
+                    isActive
+                      ? 'bg-emerald-500/10 text-emerald-500'
+                      : 'text-sidebar-foreground hover:bg-sidebar-accent'
+                  )}
+                >
+                  <Icon className="w-5 h-5 shrink-0" />
+                  {!collapsed && <span className="text-sm font-medium">{item.label}</span>}
+                </button>
+              )
+            })}
+          </nav>
+
+          {/* User Info & Logout */}
+          <div className="p-3 border-t border-sidebar-border space-y-2">
+            {!collapsed && userEmail && (
+              <div className="px-3 py-2 text-xs text-muted-foreground truncate">
+                {userEmail}
+              </div>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn(
+                'w-full text-red-400 hover:text-red-300 hover:bg-red-500/10',
+                collapsed ? 'justify-center' : 'justify-start'
+              )}
+              onClick={handleLogout}
+            >
+              <LogOut className="w-4 h-4" />
+              {!collapsed && <span className="ml-2">Cerrar sesion</span>}
+            </Button>
+          </div>
+
+          {/* Collapse Toggle */}
+          <div className="p-3 border-t border-sidebar-border hidden md:block">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full justify-center"
+              onClick={() => setCollapsed(!collapsed)}
+            >
+              {collapsed ? (
+                <ChevronRight className="w-4 h-4" />
+              ) : (
+                <>
+                  <ChevronLeft className="w-4 h-4 mr-2" />
+                  <span>Colapsar</span>
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      </aside>
+
+      {/* Mobile Bottom Navigation */}
+      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-sidebar border-t border-sidebar-border md:hidden">
+        <div className="flex justify-around py-2 overflow-x-auto">
+          {navItems.slice(0, 5).map((item) => {
+            const Icon = item.icon
+            const isActive = activeTab === item.id
+            return (
+              <button
+                key={item.id}
+                onClick={() => onTabChange(item.id)}
+                className={cn(
+                  'flex flex-col items-center gap-1 px-2 py-2 rounded-lg transition-colors min-w-0',
+                  isActive ? 'text-emerald-500' : 'text-sidebar-foreground'
+                )}
+              >
+                <Icon className="w-5 h-5" />
+                <span className="text-[10px] truncate">{item.label}</span>
+              </button>
+            )
+          })}
+        </div>
+      </nav>
+    </>
+  )
+}
