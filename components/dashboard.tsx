@@ -3,9 +3,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Wallet, TrendingUp, TrendingDown, CreditCard, CalendarCheck, FileText } from 'lucide-react'
-import { useAccounts, useSubscriptions, useCreditCards, useTransactions, useFixedExpenses } from '@/hooks/use-finance-data'
+import { useAccounts, useSubscriptions, useCreditCards, useTransactions, useFixedExpenses, useFixedExpensePayments } from '@/hooks/use-finance-data'
 import { MonthlyBalance } from '@/components/monthly-balance'
-import { cn } from '@/lib/utils'
+import { cn, toMonthKey, formatDueDateLabel } from '@/lib/utils'
 
 function formatCurrency(amount: number, currency: string = 'ARS') {
   return new Intl.NumberFormat('es-AR', {
@@ -45,8 +45,9 @@ export function Dashboard() {
   const { creditCards, isLoading: loadingCards } = useCreditCards()
   const { transactions, isLoading: loadingTransactions } = useTransactions()
   const { fixedExpenses, isLoading: loadingFixed } = useFixedExpenses()
+  const { payments, isLoading: loadingPayments } = useFixedExpensePayments()
 
-  const isLoading = loadingAccounts || loadingSubscriptions || loadingCards || loadingTransactions || loadingFixed
+  const isLoading = loadingAccounts || loadingSubscriptions || loadingCards || loadingTransactions || loadingFixed || loadingPayments
 
   if (isLoading) {
     return <LoadingSkeleton />
@@ -59,6 +60,7 @@ export function Dashboard() {
   // Transacciones del mes actual
   const currentMonth = new Date().getMonth()
   const currentYear = new Date().getFullYear()
+  const monthKey = toMonthKey()
   const monthTransactions = transactions.filter(t => {
     const date = new Date(t.date)
     return date.getMonth() === currentMonth && date.getFullYear() === currentYear
@@ -71,9 +73,16 @@ export function Dashboard() {
   const pendingSubscriptions = subscriptions.filter(s => !s.is_paid)
   const totalPendingSubs = pendingSubscriptions.reduce((sum, s) => sum + Number(s.amount), 0)
 
-  // Gastos fijos pendientes
-  const pendingFixed = fixedExpenses.filter(f => !f.is_paid_this_month)
+  // Gastos fijos pendientes (sin pago registrado este mes)
+  const paidExpenseIds = new Set(
+    payments.filter((p) => p.month_key === monthKey).map((p) => p.fixed_expense_id),
+  )
+  const pendingFixed = fixedExpenses.filter((f) => !paidExpenseIds.has(f.id))
   const totalPendingFixed = pendingFixed.reduce((sum, f) => sum + Number(f.amount), 0)
+  const fixedProgress =
+    fixedExpenses.length === 0
+      ? 0
+      : Math.round(((fixedExpenses.length - pendingFixed.length) / fixedExpenses.length) * 100)
 
   // Total consumido en tarjetas
   const totalCardBalance = creditCards.reduce((sum, c) => sum + Number(c.current_balance), 0)
@@ -158,7 +167,9 @@ export function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{formatCurrency(totalPendingFixed)}</div>
-            <p className="text-xs text-muted-foreground">{pendingFixed.length} por pagar</p>
+            <p className="text-xs text-muted-foreground">
+              {pendingFixed.length} por pagar · {fixedProgress}% del mes
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -208,7 +219,9 @@ export function Dashboard() {
                 <div key={expense.id} className="flex justify-between items-center">
                   <div>
                     <span className="text-sm text-foreground">{expense.name}</span>
-                    <p className="text-xs text-muted-foreground">Vence dia {expense.due_day}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Vence {formatDueDateLabel(expense.due_day, monthKey)}
+                    </p>
                   </div>
                   <span className="text-sm font-medium text-purple-400">
                     {formatCurrency(Number(expense.amount), expense.currency)}

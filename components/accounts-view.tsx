@@ -1,8 +1,13 @@
 'use client'
 
-import { useState } from 'react'
-import { useAccounts, createAccount, updateAccount, deleteAccount } from '@/hooks/use-finance-data'
-import type { Account } from '@/lib/types'
+import { useCallback, useEffect, useState } from 'react'
+import {
+  useAccounts,
+  createAccount,
+  updateAccount,
+  deleteAccount,
+} from '@/hooks/use-finance-data'
+import type { Account, MercadoPagoStatus } from '@/lib/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -39,8 +44,18 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Plus, Pencil, Trash2, Wallet, Loader2 } from 'lucide-react'
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  Wallet,
+  Loader2,
+  Link2,
+  RefreshCw,
+  Unlink,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { mutate } from 'swr'
 
 function formatCurrency(amount: number, currency: string) {
   return new Intl.NumberFormat('es-AR', {
@@ -71,6 +86,40 @@ export function AccountsView() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [formData, setFormData] = useState<AccountFormData>(initialFormData)
   const [isSaving, setIsSaving] = useState(false)
+  const [mpStatus, setMpStatus] = useState<MercadoPagoStatus | null>(null)
+  const [mpLoading, setMpLoading] = useState(true)
+  const [mpSyncing, setMpSyncing] = useState(false)
+  const [mpMessage, setMpMessage] = useState<string | null>(null)
+
+  const loadMpStatus = useCallback(async () => {
+    try {
+      const res = await fetch('/api/mercadopago/status')
+      if (!res.ok) throw new Error('status failed')
+      const data = (await res.json()) as MercadoPagoStatus
+      setMpStatus(data)
+    } catch {
+      setMpStatus({ connected: false })
+    } finally {
+      setMpLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadMpStatus()
+
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('mp') === 'connected') {
+      setMpMessage('Mercado Pago conectado. Ya podés sincronizar movimientos.')
+    }
+    const err = params.get('mp_error')
+    if (err === 'config') {
+      setMpMessage('Faltan credenciales de Mercado Pago en el servidor (.env).')
+    } else if (err === 'denied') {
+      setMpMessage('No se autorizó el acceso a Mercado Pago.')
+    } else if (err === 'state' || err === 'callback') {
+      setMpMessage('Hubo un problema al conectar Mercado Pago. Probá de nuevo.')
+    }
+  }, [loadMpStatus])
 
   const handleOpenCreate = () => {
     setEditingAccount(null)
@@ -130,6 +179,41 @@ export function AccountsView() {
     }
   }
 
+  const handleSync = async () => {
+    setMpSyncing(true)
+    setMpMessage(null)
+    try {
+      const res = await fetch('/api/mercadopago/sync', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Error al sincronizar')
+      setMpMessage(
+        `Sync OK: ${data.imported} nuevos, ${data.updated} actualizados` +
+          (data.balanceUpdated ? `, saldo ${formatCurrency(data.balance, 'ARS')}` : ''),
+      )
+      mutate('accounts')
+      mutate('transactions')
+      await loadMpStatus()
+    } catch (error) {
+      setMpMessage(error instanceof Error ? error.message : 'Error al sincronizar')
+    } finally {
+      setMpSyncing(false)
+    }
+  }
+
+  const handleDisconnect = async () => {
+    setMpLoading(true)
+    setMpMessage(null)
+    try {
+      const res = await fetch('/api/mercadopago/disconnect', { method: 'POST' })
+      if (!res.ok) throw new Error('No se pudo desconectar')
+      setMpMessage('Mercado Pago desconectado. La cuenta queda en CocoCash; podés borrarla si querés.')
+      await loadMpStatus()
+    } catch {
+      setMpMessage('Error al desconectar Mercado Pago.')
+      setMpLoading(false)
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -152,6 +236,77 @@ export function AccountsView() {
         </Button>
       </div>
 
+      {/* Mercado Pago */}
+      <Card className="border-sky-500/20 bg-sky-500/5">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Link2 className="h-5 w-5 text-sky-400" />
+            Mercado Pago
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {mpLoading ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Cargando conexión...
+            </div>
+          ) : mpStatus?.connected ? (
+            <>
+              <div>
+                <p className="font-medium">
+                  Conectado
+                  {mpStatus.nickname ? ` · ${mpStatus.nickname}` : ''}
+                </p>
+                {mpStatus.email && (
+                  <p className="text-sm text-muted-foreground">{mpStatus.email}</p>
+                )}
+                <p className="text-xs text-muted-foreground mt-1">
+                  {mpStatus.lastSyncedAt
+                    ? `Última sync: ${new Date(mpStatus.lastSyncedAt).toLocaleString('es-AR')}`
+                    : 'Todavía no sincronizaste movimientos'}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  onClick={handleSync}
+                  disabled={mpSyncing}
+                  className="bg-sky-500 hover:bg-sky-600"
+                >
+                  {mpSyncing ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                  )}
+                  Sincronizar
+                </Button>
+                <Button variant="outline" onClick={handleDisconnect}>
+                  <Unlink className="h-4 w-4 mr-2" />
+                  Desconectar
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground">
+                Conectá tu cuenta de Mercado Pago para traer movimientos a CocoCash.
+                Cada usuario conecta la suya.
+              </p>
+              <Button asChild className="bg-sky-500 hover:bg-sky-600">
+                <a href="/api/mercadopago/connect">
+                  <Link2 className="h-4 w-4 mr-2" />
+                  Conectar Mercado Pago
+                </a>
+              </Button>
+            </>
+          )}
+          {mpMessage && (
+            <p className="text-sm text-muted-foreground border border-border/50 rounded-md px-3 py-2">
+              {mpMessage}
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
       <Card className="border-border/50 bg-card/50">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -169,6 +324,7 @@ export function AccountsView() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Nombre</TableHead>
+                  <TableHead>Origen</TableHead>
                   <TableHead>Moneda</TableHead>
                   <TableHead className="text-right">Saldo</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
@@ -179,19 +335,35 @@ export function AccountsView() {
                   <TableRow key={account.id}>
                     <TableCell className="font-medium">{account.name}</TableCell>
                     <TableCell>
-                      <span className={cn(
-                        'px-2 py-1 rounded text-xs font-medium',
-                        account.currency === 'USD' 
-                          ? 'bg-blue-500/10 text-blue-400' 
-                          : 'bg-emerald-500/10 text-emerald-400'
-                      )}>
+                      <span
+                        className={cn(
+                          'px-2 py-1 rounded text-xs font-medium',
+                          account.source === 'mercadopago'
+                            ? 'bg-sky-500/10 text-sky-400'
+                            : 'bg-muted text-muted-foreground',
+                        )}
+                      >
+                        {account.source === 'mercadopago' ? 'Mercado Pago' : 'Manual'}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <span
+                        className={cn(
+                          'px-2 py-1 rounded text-xs font-medium',
+                          account.currency === 'USD'
+                            ? 'bg-blue-500/10 text-blue-400'
+                            : 'bg-emerald-500/10 text-emerald-400',
+                        )}
+                      >
                         {account.currency}
                       </span>
                     </TableCell>
-                    <TableCell className={cn(
-                      'text-right font-medium',
-                      Number(account.balance) >= 0 ? 'text-emerald-400' : 'text-red-400'
-                    )}>
+                    <TableCell
+                      className={cn(
+                        'text-right font-medium',
+                        Number(account.balance) >= 0 ? 'text-emerald-400' : 'text-red-400',
+                      )}
+                    >
                       {formatCurrency(Number(account.balance), account.currency)}
                     </TableCell>
                     <TableCell className="text-right">
@@ -221,7 +393,6 @@ export function AccountsView() {
         </CardContent>
       </Card>
 
-      {/* Create/Edit Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -242,7 +413,9 @@ export function AccountsView() {
               <label className="text-sm font-medium">Moneda</label>
               <Select
                 value={formData.currency}
-                onValueChange={(value: 'ARS' | 'USD') => setFormData({ ...formData, currency: value })}
+                onValueChange={(value: 'ARS' | 'USD') =>
+                  setFormData({ ...formData, currency: value })
+                }
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -267,7 +440,7 @@ export function AccountsView() {
             <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
               Cancelar
             </Button>
-            <Button 
+            <Button
               onClick={handleSubmit}
               disabled={!formData.name || isSaving}
               className="bg-emerald-500 hover:bg-emerald-600"
@@ -277,15 +450,16 @@ export function AccountsView() {
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   Guardando...
                 </>
+              ) : editingAccount ? (
+                'Guardar'
               ) : (
-                editingAccount ? 'Guardar' : 'Crear'
+                'Crear'
               )}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation */}
       <AlertDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>

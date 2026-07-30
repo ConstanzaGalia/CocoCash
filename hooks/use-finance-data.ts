@@ -1,7 +1,8 @@
 'use client'
 
 import { createClient } from '@/lib/supabase/client'
-import { Account, Subscription, CreditCard, Transaction, FixedExpense } from '@/lib/types'
+import { Account, Subscription, CreditCard, Transaction, FixedExpense, FixedExpensePayment } from '@/lib/types'
+import { toMonthKey } from '@/lib/utils'
 import useSWR, { mutate } from 'swr'
 
 const supabase = createClient()
@@ -37,6 +38,16 @@ async function fetchFixedExpenses(): Promise<FixedExpense[]> {
   return data || []
 }
 
+async function fetchFixedExpensePayments(): Promise<FixedExpensePayment[]> {
+  const { data, error } = await supabase
+    .from('fixed_expense_payments')
+    .select('*')
+    .order('month_key', { ascending: false })
+    .order('paid_at', { ascending: false })
+  if (error) throw error
+  return data || []
+}
+
 // Hooks
 export function useAccounts() {
   const { data, error, isLoading } = useSWR('accounts', fetchAccounts)
@@ -61,6 +72,11 @@ export function useTransactions() {
 export function useFixedExpenses() {
   const { data, error, isLoading } = useSWR('fixed_expenses', fetchFixedExpenses)
   return { fixedExpenses: data || [], error, isLoading }
+}
+
+export function useFixedExpensePayments() {
+  const { data, error, isLoading } = useSWR('fixed_expense_payments', fetchFixedExpensePayments)
+  return { payments: data || [], error, isLoading }
 }
 
 // CRUD Operations - Accounts
@@ -181,6 +197,100 @@ export async function deleteFixedExpense(id: string) {
   const { error } = await supabase.from('fixed_expenses').delete().eq('id', id)
   if (error) throw error
   mutate('fixed_expenses')
+  mutate('fixed_expense_payments')
+}
+
+// CRUD Operations - Fixed Expense Payments (historial mensual)
+export async function recordFixedExpensePayment(input: {
+  fixed_expense_id: string
+  month_key: string
+  amount_paid: number
+  currency: 'ARS' | 'USD'
+  paid_at?: string
+  notes?: string | null
+}) {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('No user')
+
+  const { data, error } = await supabase
+    .from('fixed_expense_payments')
+    .upsert(
+      {
+        user_id: user.id,
+        fixed_expense_id: input.fixed_expense_id,
+        month_key: input.month_key,
+        amount_paid: input.amount_paid,
+        currency: input.currency,
+        paid_at: input.paid_at ?? new Date().toISOString().split('T')[0],
+        notes: input.notes ?? null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'fixed_expense_id,month_key' },
+    )
+    .select()
+    .single()
+
+  if (error) throw error
+
+  // Mantener campos legacy en sync (opcional, para dashboard viejo)
+  if (input.month_key === toMonthKey()) {
+    await updateFixedExpense(input.fixed_expense_id, {
+      is_paid_this_month: true,
+      last_paid_date: input.paid_at ?? new Date().toISOString().split('T')[0],
+    })
+  }
+
+  mutate('fixed_expense_payments')
+  return data
+}
+
+export async function updateFixedExpensePayment(
+  id: string,
+  updates: Partial<Pick<FixedExpensePayment, 'amount_paid' | 'currency' | 'paid_at' | 'notes'>>,
+) {
+  const { data, error } = await supabase
+    .from('fixed_expense_payments')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  mutate('fixed_expense_payments')
+  return data
+}
+
+export async function deleteFixedExpensePayment(id: string) {
+  const { data: payment, error: fetchError } = await supabase
+    .from('fixed_expense_payments')
+    .select('*')
+    .eq('id', id)
+    .single()
+  if (fetchError) throw fetchError
+
+  const { error } = await supabase.from('fixed_expense_payments').delete().eq('id', id)
+  if (error) throw error
+
+  if (payment && payment.month_key === toMonthKey()) {
+    await updateFixedExpense(payment.fixed_expense_id, {
+      is_paid_this_month: false,
+      last_paid_date: null,
+    })
+  }
+
+  mutate('fixed_expense_payments')
+}
+
+export async function deleteFixedExpensePaymentForMonth(fixedExpenseId: string, monthKey: string) {
+  const { data: payment } = await supabase
+    .from('fixed_expense_payments')
+    .select('id')
+    .eq('fixed_expense_id', fixedExpenseId)
+    .eq('month_key', monthKey)
+    .maybeSingle()
+
+  if (payment) {
+    await deleteFixedExpensePayment(payment.id)
+  }
 }
 
 // Toggle paid status helpers
@@ -190,11 +300,4 @@ export async function toggleSubscriptionPaid(id: string, isPaid: boolean) {
 
 export async function toggleTransactionPaid(id: string, isPaid: boolean) {
   return updateTransaction(id, { is_paid: isPaid })
-}
-
-export async function toggleFixedExpensePaid(id: string, isPaid: boolean) {
-  return updateFixedExpense(id, { 
-    is_paid_this_month: isPaid,
-    last_paid_date: isPaid ? new Date().toISOString().split('T')[0] : null
-  })
 }

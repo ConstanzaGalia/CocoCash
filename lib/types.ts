@@ -4,6 +4,8 @@ export interface Account {
   name: string
   currency: 'ARS' | 'USD'
   balance: number
+  source?: 'manual' | 'mercadopago'
+  external_id?: string | null
   created_at: string
   updated_at: string
 }
@@ -47,8 +49,20 @@ export interface Transaction {
   description: string | null
   date: string
   is_paid: boolean
+  source?: 'manual' | 'mercadopago'
+  external_id?: string | null
   created_at: string
   updated_at: string
+}
+
+export interface MercadoPagoStatus {
+  connected: boolean
+  mpUserId?: string
+  nickname?: string | null
+  email?: string | null
+  accountId?: string | null
+  lastSyncedAt?: string | null
+  connectedAt?: string
 }
 
 export interface FixedExpense {
@@ -59,8 +73,24 @@ export interface FixedExpense {
   currency: 'ARS' | 'USD'
   due_day: number
   category: string
+  /** @deprecated Usar fixed_expense_payments. Se mantiene por compatibilidad. */
   is_paid_this_month: boolean
+  /** @deprecated Usar fixed_expense_payments. Se mantiene por compatibilidad. */
   last_paid_date: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+/** Un pago concreto de un gasto fijo en un mes (YYYY-MM). */
+export interface FixedExpensePayment {
+  id: string
+  user_id: string
+  fixed_expense_id: string
+  month_key: string
+  amount_paid: number
+  currency: 'ARS' | 'USD'
+  paid_at: string
   notes: string | null
   created_at: string
   updated_at: string

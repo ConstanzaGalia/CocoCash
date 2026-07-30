@@ -16,9 +16,17 @@ export default function DashboardPage() {
   const [userEmail, setUserEmail] = useState<string>()
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const view = params.get('view')
+    if (view) {
+      setActiveTab(view)
+    }
+
     const getUser = async () => {
       const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
       if (user) {
         setUserEmail(user.email)
       }
@@ -48,13 +56,13 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-background">
       <Sidebar activeTab={activeTab} onTabChange={setActiveTab} userEmail={userEmail} />
-      <main className={cn(
-        'transition-all duration-300 pb-20 md:pb-0',
-        'md:ml-64 p-6 md:p-8'
-      )}>
-        <div className="max-w-7xl mx-auto pt-12 md:pt-0">
-          {renderContent()}
-        </div>
+      <main
+        className={cn(
+          'transition-all duration-300 pb-20 md:pb-0',
+          'md:ml-64 p-6 md:p-8',
+        )}
+      >
+        <div className="max-w-7xl mx-auto pt-12 md:pt-0">{renderContent()}</div>
       </main>
     </div>
   )
