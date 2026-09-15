@@ -61,7 +61,7 @@ export default function DashboardPage() {
       <Sidebar activeTab={activeTab} onTabChange={setActiveTab} userEmail={userEmail} />
       <main
         className={cn(
-          'transition-all duration-300 px-4 pt-[4.5rem] pb-36 md:ml-64 md:px-8 md:pt-8 md:pb-8',
+          'transition-all duration-300 px-4 pt-[calc(4.5rem+var(--safe-top))] pb-36 md:ml-64 md:px-8 md:pt-8 md:pb-8',
         )}
       >
         <div className="max-w-7xl mx-auto">{renderContent()}</div>

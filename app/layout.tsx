@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   generator: 'v0.app',
   appleWebApp: {
     capable: true,
-    statusBarStyle: 'black-translucent',
+    statusBarStyle: 'black',
     title: 'CocoCash',
   },
   other: {

@@ -47,17 +47,19 @@ export function Sidebar({ activeTab, onTabChange, userEmail }: SidebarProps) {
   return (
     <>
       {/* Mobile top bar */}
-      <header className="fixed inset-x-0 top-0 z-40 flex h-14 items-center justify-between border-b border-sidebar-border bg-background/95 px-2 backdrop-blur md:hidden">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="shrink-0"
-          onClick={() => setMobileOpen(true)}
-          aria-label="Abrir menú"
-        >
-          <Menu className="h-5 w-5" />
-        </Button>
-        <Logo size={40} />
+      <header className="fixed inset-x-0 top-0 z-40 border-b border-sidebar-border bg-background/95 pt-[var(--safe-top)] backdrop-blur md:hidden">
+        <div className="flex h-14 items-center justify-between px-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="shrink-0"
+            onClick={() => setMobileOpen(true)}
+            aria-label="Abrir menú"
+          >
+            <Menu className="h-5 w-5" />
+          </Button>
+          <Logo size={40} />
+        </div>
       </header>
 
       {/* Mobile Overlay */}
@@ -71,7 +73,7 @@ export function Sidebar({ activeTab, onTabChange, userEmail }: SidebarProps) {
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed left-0 top-0 z-50 h-screen bg-sidebar border-r border-sidebar-border transition-all duration-300',
+          'fixed left-0 top-0 z-50 h-dvh bg-sidebar border-r border-sidebar-border pt-[var(--safe-top)] transition-all duration-300',
           collapsed ? 'w-16' : 'w-64',
           mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
         )}

@@ -122,4 +122,12 @@
   body {
     @apply bg-background text-foreground;
   }
+  :root {
+    --safe-top: env(safe-area-inset-top, 0px);
+  }
+  @media (display-mode: standalone), (display-mode: fullscreen) {
+    :root {
+      --safe-top: max(env(safe-area-inset-top, 0px), 2rem);
+    }
+  }
 }
