@@ -248,7 +248,7 @@ export function TransferDialog({ open, onOpenChange, presetTo, presetFrom }: Tra
           <Button
             onClick={handleSave}
             disabled={!fromKey || !toKey || !amount || (isFx && !toAmount) || saving}
-            className="bg-emerald-500 hover:bg-emerald-600"
+            className="bg-primary hover:bg-primary/90"
           >
             {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
             Traspasar

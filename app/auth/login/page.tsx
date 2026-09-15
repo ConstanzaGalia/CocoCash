@@ -16,6 +16,7 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Logo } from '@/components/logo'
+import { ThemeToggle } from '@/components/theme-toggle'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -45,10 +46,13 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-svh w-full items-center justify-center bg-background p-6 md:p-10">
+    <div className="relative flex min-h-svh w-full items-center justify-center bg-background p-6 md:p-10">
+      <div className="absolute right-4 top-4">
+        <ThemeToggle />
+      </div>
       <div className="w-full max-w-sm">
         <div className="flex flex-col gap-6">
-<Logo size={80} className="justify-center" />
+          <Logo size={80} className="justify-center" />
           <Card className="border-border/50 bg-card/50 backdrop-blur">
             <CardHeader>
               <CardTitle className="text-2xl">Iniciar sesion</CardTitle>
@@ -83,9 +87,9 @@ export default function LoginPage() {
                     />
                   </div>
                   {error && <p className="text-sm text-red-500">{error}</p>}
-                  <Button 
-                    type="submit" 
-                    className="w-full bg-emerald-600 hover:bg-emerald-700" 
+                  <Button
+                    type="submit"
+                    className="w-full bg-primary hover:bg-primary/90"
                     disabled={isLoading}
                   >
                     {isLoading ? (
@@ -102,7 +106,7 @@ export default function LoginPage() {
                   No tienes cuenta?{' '}
                   <Link
                     href="/auth/sign-up"
-                    className="text-emerald-500 underline underline-offset-4 hover:text-emerald-400"
+                    className="text-primary underline underline-offset-4 hover:text-primary/80"
                   >
                     Registrate
                   </Link>

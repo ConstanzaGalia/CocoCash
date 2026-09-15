@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Logo } from '@/components/logo'
+import { ThemeToggle } from '@/components/theme-toggle'
 
 interface SidebarProps {
   activeTab: string
@@ -61,6 +62,7 @@ export function Sidebar({ activeTab, onTabChange, userEmail }: SidebarProps) {
             <Menu className="h-5 w-5" />
           </Button>
           <Logo size={40} />
+          <ThemeToggle />
         </div>
       </header>
 
@@ -114,7 +116,7 @@ export function Sidebar({ activeTab, onTabChange, userEmail }: SidebarProps) {
                   className={cn(
                     'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors',
                     isActive
-                      ? 'bg-emerald-500/10 text-emerald-500'
+                      ? 'bg-primary/10 text-primary'
                       : 'text-sidebar-foreground hover:bg-sidebar-accent'
                   )}
                 >
@@ -132,11 +134,17 @@ export function Sidebar({ activeTab, onTabChange, userEmail }: SidebarProps) {
                 {userEmail}
               </div>
             )}
+            <div className={cn('flex items-center gap-1', collapsed ? 'justify-center' : 'justify-between px-1')}>
+              <ThemeToggle />
+              {!collapsed && (
+                <span className="text-xs text-muted-foreground">Tema</span>
+              )}
+            </div>
             <Button
               variant="ghost"
               size="sm"
               className={cn(
-                'w-full text-red-400 hover:text-red-300 hover:bg-red-500/10',
+                'w-full text-red-500 hover:text-red-600 hover:bg-red-500/10 dark:text-red-400 dark:hover:text-red-300',
                 collapsed ? 'justify-center' : 'justify-start'
               )}
               onClick={handleLogout}
@@ -179,7 +187,7 @@ export function Sidebar({ activeTab, onTabChange, userEmail }: SidebarProps) {
                 onClick={() => onTabChange(item.id)}
                 className={cn(
                   'flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1 py-2.5 transition-colors',
-                  isActive ? 'text-emerald-500' : 'text-sidebar-foreground',
+                  isActive ? 'text-primary' : 'text-sidebar-foreground',
                 )}
               >
                 <Icon className="h-5 w-5 shrink-0" />

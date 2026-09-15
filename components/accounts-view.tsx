@@ -243,7 +243,7 @@ export function AccountsView() {
             <ArrowRightLeft className="h-4 w-4 mr-2" />
             Traspaso
           </Button>
-          <Button onClick={handleOpenCreate} className="w-full bg-emerald-500 hover:bg-emerald-600 md:w-auto">
+          <Button onClick={handleOpenCreate} className="w-full bg-primary hover:bg-primary/90 md:w-auto">
             <Plus className="h-4 w-4 mr-2" />
             Nueva Cuenta
           </Button>
@@ -324,7 +324,7 @@ export function AccountsView() {
       <Card className="border-border/50 bg-card/50">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Wallet className="h-5 w-5 text-emerald-500" />
+            <Wallet className="h-5 w-5 text-primary" />
             Todas las Cuentas
           </CardTitle>
         </CardHeader>
@@ -350,7 +350,7 @@ export function AccountsView() {
                               'px-2 py-0.5 rounded text-xs font-medium',
                               account.kind === 'savings'
                                 ? 'bg-blue-500/10 text-blue-400'
-                                : 'bg-emerald-500/10 text-emerald-400',
+                                : 'bg-primary/10 text-primary',
                             )}
                           >
                             {account.kind === 'savings' ? 'Ahorros' : 'Disponible'}
@@ -363,7 +363,7 @@ export function AccountsView() {
                       <p
                         className={cn(
                           'text-lg font-bold shrink-0',
-                          Number(account.balance) >= 0 ? 'text-emerald-400' : 'text-red-400',
+                          Number(account.balance) >= 0 ? 'text-primary' : 'text-red-400',
                         )}
                       >
                         {formatCurrency(Number(account.balance), account.currency)}
@@ -407,7 +407,7 @@ export function AccountsView() {
                           'px-2 py-1 rounded text-xs font-medium',
                           account.kind === 'savings'
                             ? 'bg-blue-500/10 text-blue-400'
-                            : 'bg-emerald-500/10 text-emerald-400',
+                            : 'bg-primary/10 text-primary',
                         )}
                       >
                         {account.kind === 'savings' ? 'Ahorros' : 'Disponible'}
@@ -431,7 +431,7 @@ export function AccountsView() {
                           'px-2 py-1 rounded text-xs font-medium',
                           account.currency === 'USD'
                             ? 'bg-blue-500/10 text-blue-400'
-                            : 'bg-emerald-500/10 text-emerald-400',
+                            : 'bg-primary/10 text-primary',
                         )}
                       >
                         {account.currency}
@@ -440,7 +440,7 @@ export function AccountsView() {
                     <TableCell
                       className={cn(
                         'text-right font-medium',
-                        Number(account.balance) >= 0 ? 'text-emerald-400' : 'text-red-400',
+                        Number(account.balance) >= 0 ? 'text-primary' : 'text-red-400',
                       )}
                     >
                       {formatCurrency(Number(account.balance), account.currency)}
@@ -545,7 +545,7 @@ export function AccountsView() {
             <Button
               onClick={handleSubmit}
               disabled={!formData.name || isSaving}
-              className="bg-emerald-500 hover:bg-emerald-600"
+              className="bg-primary hover:bg-primary/90"
             >
               {isSaving ? (
                 <>

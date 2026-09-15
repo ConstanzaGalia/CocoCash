@@ -123,7 +123,7 @@ export function QuickCashFab() {
         <Button
           type="button"
           onClick={openSheet}
-          className="fixed z-40 h-14 w-14 rounded-full bg-emerald-500 hover:bg-emerald-600 shadow-lg right-4 bottom-[calc(5.75rem+env(safe-area-inset-bottom))] md:bottom-6 md:right-6"
+          className="fixed z-40 h-14 w-14 rounded-full bg-primary hover:bg-primary/90 shadow-lg right-4 bottom-[calc(5.75rem+env(safe-area-inset-bottom))] md:bottom-6 md:right-6"
           aria-label="Agregar movimiento"
         >
           <Plus className="h-7 w-7" />
@@ -150,7 +150,7 @@ export function QuickCashFab() {
                 }}
                 className={`flex h-12 items-center justify-center gap-2 rounded-xl border text-sm font-semibold ${
                   mode === 'income'
-                    ? 'border-emerald-500 bg-emerald-500/15 text-emerald-400'
+                    ? 'border-primary bg-primary/15 text-primary'
                     : 'border-border text-muted-foreground'
                 }`}
               >
@@ -202,7 +202,7 @@ export function QuickCashFab() {
                         onClick={() => setSource(item)}
                         className={`rounded-full px-3 py-1.5 text-xs font-medium border ${
                           source?.id === item.id
-                            ? 'border-emerald-500 bg-emerald-500/15 text-emerald-400'
+                            ? 'border-primary bg-primary/15 text-primary'
                             : 'border-border text-muted-foreground'
                         }`}
                       >
@@ -272,7 +272,7 @@ export function QuickCashFab() {
               disabled={saving || !amount || (mode === 'income' && activeSources.length === 0)}
               className={
                 mode === 'income'
-                  ? 'h-12 w-full bg-emerald-500 hover:bg-emerald-600'
+                  ? 'h-12 w-full bg-primary hover:bg-primary/90'
                   : 'h-12 w-full bg-red-500 hover:bg-red-600'
               }
             >

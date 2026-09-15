@@ -23,7 +23,7 @@ export function Logo({ size = 48, showText = false, className, textClassName }: 
       {showText && (
         <span className={cn('font-bold tracking-tight', textClassName)}>
           <span className="text-[#d9b38c]">Coco</span>
-          <span className="text-emerald-500">Cash</span>
+          <span className="text-primary">Cash</span>
         </span>
       )}
     </div>

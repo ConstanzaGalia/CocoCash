@@ -1,26 +1,34 @@
 import type { Metadata, Viewport } from 'next'
-import { Geist, Geist_Mono } from 'next/font/google'
+import { Plus_Jakarta_Sans } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
+import { ThemeProvider } from '@/components/theme-provider'
+import { ThemeColorMeta } from '@/components/theme-color-meta'
 import './globals.css'
 
-const _geist = Geist({ subsets: ["latin"] });
-const _geistMono = Geist_Mono({ subsets: ["latin"] });
+const plusJakarta = Plus_Jakarta_Sans({
+  subsets: ['latin'],
+  variable: '--font-plus-jakarta',
+})
 
 export const viewport: Viewport = {
-  themeColor: '#0a0a0a',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#f9f9ff' },
+    { media: '(prefers-color-scheme: dark)', color: '#161b26' },
+  ],
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
 }
 
 export const metadata: Metadata = {
-  title: 'CocoCash - Gestion de Finanzas Personales',
-  description: 'CocoCash: gestiona tus finanzas personales en un solo lugar. Cuentas, suscripciones, tarjetas, gastos fijos y balance mensual.',
+  title: 'CocoCash - Presupuesto mensual simple',
+  description:
+    'CocoCash: controlá ingresos, gastos fijos, variables y ahorros en ARS y USD. Instalable como app.',
   applicationName: 'CocoCash',
   generator: 'v0.app',
   appleWebApp: {
     capable: true,
-    statusBarStyle: 'black',
+    statusBarStyle: 'default',
     title: 'CocoCash',
   },
   other: {
@@ -65,9 +73,12 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="es" className="dark bg-background">
+    <html lang="es" className={`${plusJakarta.variable} bg-background`} suppressHydrationWarning>
       <body className="font-sans antialiased bg-background">
-        {children}
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
+          <ThemeColorMeta />
+          {children}
+        </ThemeProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>

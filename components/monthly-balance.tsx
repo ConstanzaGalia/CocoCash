@@ -59,25 +59,25 @@ export function MonthlyBalance({ transactions }: MonthlyBalanceProps) {
       <Card
         className={
           isPositive
-            ? 'bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 border-emerald-500/20'
+            ? 'bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20'
             : 'bg-gradient-to-br from-red-500/10 to-red-500/5 border-red-500/20'
         }
       >
         <CardHeader className="pb-2">
-          <CardTitle className={`text-sm font-medium ${isPositive ? 'text-emerald-400' : 'text-red-400'}`}>
+          <CardTitle className={`text-sm font-medium ${isPositive ? 'text-primary' : 'text-red-400'}`}>
             Resultado del mes ({currency})
           </CardTitle>
           <CardDescription>Cobros menos gastos de este mes. No es el disponible.</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className={`text-3xl font-bold ${isPositive ? 'text-emerald-400' : 'text-red-400'}`}>
+          <div className={`text-3xl font-bold ${isPositive ? 'text-primary' : 'text-red-400'}`}>
             {isPositive ? '+' : ''}
             {formatCurrency(netBalance, currency)}
           </div>
           <div className="mt-4 space-y-1.5">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Ingresos</span>
-              <span className="font-medium text-emerald-400">{formatCurrency(current.ingresos, currency)}</span>
+              <span className="font-medium text-primary">{formatCurrency(current.ingresos, currency)}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Gastos</span>

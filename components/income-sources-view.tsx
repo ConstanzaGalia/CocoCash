@@ -127,7 +127,7 @@ export function IncomeAmountDialog({
           <Button
             onClick={handleSave}
             disabled={saving}
-            className="bg-emerald-500 hover:bg-emerald-600"
+            className="bg-primary hover:bg-primary/90"
           >
             {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
             Sumar cobro
@@ -213,7 +213,7 @@ export function IncomeSourcesView() {
           {!isCurrentMonth && (
             <button
               type="button"
-              className="mt-1 text-xs text-emerald-400 hover:underline"
+              className="mt-1 text-xs text-primary hover:underline"
               onClick={() => setMonthKey(currentMonthKey)}
             >
               Volver al mes actual
@@ -232,16 +232,16 @@ export function IncomeSourcesView() {
         </Card>
       )}
 
-      <Card className="border-emerald-500/20 bg-emerald-500/5">
+      <Card className="border-primary/20 bg-primary/5">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-emerald-400 capitalize">
+          <CardTitle className="text-sm font-medium text-primary capitalize">
             Cobrado {isCurrentMonth ? 'este mes' : formatMonthLabel(monthKey)}
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-3xl font-bold text-emerald-400">{formatCurrency(totalArs)}</p>
+          <p className="text-3xl font-bold text-primary">{formatCurrency(totalArs)}</p>
           {totalUsd !== 0 && (
-            <p className="text-lg font-semibold text-emerald-400/80 mt-1">{formatCurrency(totalUsd, 'USD')}</p>
+            <p className="text-lg font-semibold text-primary/80 mt-1">{formatCurrency(totalUsd, 'USD')}</p>
           )}
           <p className="text-xs text-muted-foreground mt-1">El detalle está en Movimientos</p>
         </CardContent>
@@ -276,7 +276,7 @@ export function IncomeSourcesView() {
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center justify-between gap-2 text-base">
                 <span className="flex items-center gap-2 min-w-0">
-                  <TrendingUp className="h-4 w-4 shrink-0 text-emerald-400" />
+                  <TrendingUp className="h-4 w-4 shrink-0 text-primary" />
                   <span className="truncate">{source.name}</span>
                 </span>
                 <div className="flex items-center gap-0.5 shrink-0">
@@ -338,7 +338,7 @@ export function IncomeSourcesView() {
           <Button
             onClick={() => handleCreate()}
             disabled={!name.trim() || saving}
-            className="bg-emerald-500 hover:bg-emerald-600"
+            className="bg-primary hover:bg-primary/90"
           >
             <Plus className="h-4 w-4 mr-2" />
             Agregar
@@ -356,7 +356,7 @@ export function IncomeSourcesView() {
             <Button variant="outline" onClick={() => setEditing(null)}>
               Cancelar
             </Button>
-            <Button onClick={handleRename} disabled={saving} className="bg-emerald-500 hover:bg-emerald-600">
+            <Button onClick={handleRename} disabled={saving} className="bg-primary hover:bg-primary/90">
               Guardar
             </Button>
           </DialogFooter>

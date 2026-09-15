@@ -312,7 +312,7 @@ export function FixedExpensesView() {
             Alquiler, servicios, tarjetas y todo lo que se paga todos los meses
           </p>
         </div>
-        <Button onClick={handleOpenCreate} className="w-full bg-emerald-500 hover:bg-emerald-600 md:w-auto">
+        <Button onClick={handleOpenCreate} className="w-full bg-primary hover:bg-primary/90 md:w-auto">
           <Plus className="h-4 w-4 mr-2" />
           Nuevo gasto fijo
         </Button>
@@ -333,7 +333,7 @@ export function FixedExpensesView() {
           {!isCurrentMonth && (
             <button
               type="button"
-              className="text-xs text-emerald-400 hover:underline"
+              className="text-xs text-primary hover:underline"
               onClick={() => setMonthKey(currentMonthKey)}
             >
               Volver al mes actual
@@ -368,7 +368,7 @@ export function FixedExpensesView() {
                 </p>
                 <p className="text-xs text-muted-foreground">pagados este mes</p>
               </div>
-              <p className="text-2xl font-bold text-emerald-400">{progressPercent}%</p>
+              <p className="text-2xl font-bold text-primary">{progressPercent}%</p>
             </div>
             <Progress value={progressPercent} className="h-2" />
             <div className="flex justify-between text-xs text-muted-foreground">
@@ -398,7 +398,7 @@ export function FixedExpensesView() {
       <Card className="border-border/50 bg-card/50">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+            <CheckCircle2 className="h-5 w-5 text-primary" />
             Checklist · {formatMonthLabel(monthKey)}
           </CardTitle>
         </CardHeader>
@@ -409,7 +409,7 @@ export function FixedExpensesView() {
             </div>
           ) : pendingItems.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              <CheckCircle2 className="h-8 w-8 mx-auto mb-2 text-emerald-400" />
+              <CheckCircle2 className="h-8 w-8 mx-auto mb-2 text-primary" />
               <p className="font-medium text-foreground">¡Todo pagado este mes!</p>
               <p className="text-sm mt-1">Los pagos registrados están en Movimientos del mes.</p>
             </div>
@@ -648,7 +648,7 @@ export function FixedExpensesView() {
             <div className="flex justify-end mt-3 pt-3 border-t border-border/50">
               <p className="text-sm text-muted-foreground">
                 Total pagado:{' '}
-                <span className="font-semibold text-emerald-400">
+                <span className="font-semibold text-primary">
                   {formatCurrency(totalPaid, 'ARS')}
                 </span>
               </p>
@@ -746,7 +746,7 @@ export function FixedExpensesView() {
             <Button
               onClick={handleSubmit}
               disabled={!formData.name || !formData.amount || isSaving}
-              className="bg-emerald-500 hover:bg-emerald-600"
+              className="bg-primary hover:bg-primary/90"
             >
               {isSaving ? (
                 <>
@@ -806,7 +806,7 @@ export function FixedExpensesView() {
             <Button
               onClick={handleConfirmPayment}
               disabled={!payAmount || isPaying}
-              className="bg-emerald-500 hover:bg-emerald-600"
+              className="bg-primary hover:bg-primary/90"
             >
               {isPaying ? (
                 <>

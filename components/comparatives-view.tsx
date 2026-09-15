@@ -533,7 +533,7 @@ export function ComparativesView() {
                     <td className="py-2 pr-3">
                       <button
                         type="button"
-                        className="text-left font-medium hover:text-emerald-400"
+                        className="text-left font-medium hover:text-primary"
                         onClick={() => setExpenseId(row.id === expenseId ? 'all' : row.id)}
                       >
                         {row.name}
@@ -556,7 +556,7 @@ export function ComparativesView() {
                           : row.delta > 0
                             ? 'text-red-400'
                             : row.delta < 0
-                              ? 'text-emerald-400'
+                              ? 'text-primary'
                               : 'text-muted-foreground',
                       )}
                     >
@@ -577,7 +577,7 @@ export function ComparativesView() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <CardTitle className="flex items-center gap-2 text-base capitalize">
-                <PieChartIcon className="h-4 w-4 text-emerald-400" />
+                <PieChartIcon className="h-4 w-4 text-primary" />
                 Categorías · este mes
               </CardTitle>
               <CardDescription>Cómo se reparte lo gastado este mes</CardDescription>

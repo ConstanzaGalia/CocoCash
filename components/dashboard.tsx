@@ -183,7 +183,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (tab: string) => void }
           {!isCurrentMonth && (
             <button
               type="button"
-              className="mt-1 text-xs text-emerald-400 hover:underline"
+              className="mt-1 text-xs text-primary hover:underline"
               onClick={() => setMonthKey(currentMonthKey)}
             >
               Volver al mes actual
@@ -203,7 +203,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (tab: string) => void }
         </Card>
       )}
 
-      <Card className="border-0 shadow-none md:shadow-sm bg-gradient-to-br from-emerald-500/15 to-emerald-500/5 border-emerald-500/20">
+      <Card className="border-0 shadow-none md:shadow-sm bg-gradient-to-br from-primary/15 to-primary/5 border-primary/20">
         <CardContent className="pt-6 space-y-4">
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -213,7 +213,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (tab: string) => void }
               <p
                 className={cn(
                   'text-4xl md:text-5xl font-bold tracking-tight',
-                  flow.ARS.leftover >= 0 ? 'text-emerald-400' : 'text-red-400',
+                  flow.ARS.leftover >= 0 ? 'text-primary' : 'text-red-400',
                 )}
               >
                 {formatCurrency(flow.ARS.leftover)}
@@ -221,7 +221,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (tab: string) => void }
               {flow.USD.income !== 0 || flow.USD.paidFixed !== 0 || flow.USD.variable !== 0 || flow.USD.saved !== 0 ? (
                 <p className="text-sm text-muted-foreground mt-1">
                   En dólares:{' '}
-                  <span className={flow.USD.leftover >= 0 ? 'text-emerald-400' : 'text-red-400'}>
+                  <span className={flow.USD.leftover >= 0 ? 'text-primary' : 'text-red-400'}>
                     {formatCurrency(flow.USD.leftover, 'USD')}
                   </span>
                 </p>
@@ -245,7 +245,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (tab: string) => void }
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div>
               <p className="text-muted-foreground">Ingresos</p>
-              <DualAmount ars={flow.ARS.income} usd={flow.USD.income} arsClassName="text-emerald-400" size="sm" />
+              <DualAmount ars={flow.ARS.income} usd={flow.USD.income} arsClassName="text-primary" size="sm" />
             </div>
             <div>
               <p className="text-muted-foreground">Gastos fijos</p>
@@ -321,7 +321,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (tab: string) => void }
                 variant="outline"
                 size="sm"
                 onClick={() => onNavigate?.('income')}
-                className="bg-emerald-500/10 border-emerald-500/30"
+                className="bg-primary/10 border-primary/30"
               >
                 Agregar fuentes
               </Button>
@@ -345,7 +345,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (tab: string) => void }
                   <p className="text-2xl font-bold mt-1">
                     {formatCurrency(total, source.currency)}
                   </p>
-                  <p className="text-xs text-emerald-400 mt-2">
+                  <p className="text-xs text-primary mt-2">
                     {cobros.length === 0
                       ? 'Agregar cobro'
                       : `${cobros.length} cobro${cobros.length === 1 ? '' : 's'} · sumar otro`}

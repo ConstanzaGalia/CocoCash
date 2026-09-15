@@ -187,7 +187,7 @@ export function TransactionsView() {
           {!isCurrentMonth && (
             <button
               type="button"
-              className="mt-1 text-xs text-emerald-400 hover:underline"
+              className="mt-1 text-xs text-primary hover:underline"
               onClick={() => setMonthKey(currentMonthKey)}
             >
               Volver al mes actual
@@ -213,7 +213,7 @@ export function TransactionsView() {
             onClick={() => setFilter(item.id)}
             className={
               filter === item.id && item.id === 'income'
-                ? 'bg-emerald-500 hover:bg-emerald-600'
+                ? 'bg-primary hover:bg-primary/90'
                 : filter === item.id && item.id === 'expense'
                   ? 'bg-red-500 hover:bg-red-600'
                   : undefined
@@ -298,7 +298,7 @@ export function TransactionsView() {
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           {isIncome ? (
-                            <ArrowUpRight className="h-4 w-4 shrink-0 text-emerald-400" />
+                            <ArrowUpRight className="h-4 w-4 shrink-0 text-primary" />
                           ) : (
                             <ArrowDownRight className="h-4 w-4 shrink-0 text-red-400" />
                           )}
@@ -312,7 +312,7 @@ export function TransactionsView() {
                       <p
                         className={cn(
                           'text-base font-bold shrink-0',
-                          isIncome ? 'text-emerald-400' : 'text-red-400',
+                          isIncome ? 'text-primary' : 'text-red-400',
                         )}
                       >
                         {isIncome ? '+' : '-'}
@@ -407,7 +407,7 @@ export function TransactionsView() {
             <Button
               onClick={handleSubmit}
               disabled={!formData.amount || isSaving}
-              className="bg-emerald-500 hover:bg-emerald-600"
+              className="bg-primary hover:bg-primary/90"
             >
               {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
               Guardar

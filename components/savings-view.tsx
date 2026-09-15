@@ -95,7 +95,7 @@ export function SavingsView() {
         </div>
         <Button
           onClick={() => openTransfer({ kind: 'available', currency: 'ARS' }, { kind: 'savings', currency: 'ARS' })}
-          className="bg-emerald-500 hover:bg-emerald-600"
+          className="bg-primary hover:bg-primary/90"
         >
           <ArrowRightLeft className="h-4 w-4 mr-2" />
           Nuevo traspaso
