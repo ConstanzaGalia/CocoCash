@@ -14,7 +14,7 @@ function appOrigin(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   const origin = appOrigin(request)
-  const accountsUrl = `${origin}/dashboard?view=accounts`
+  const accountsUrl = `${origin}/dashboard`
 
   try {
     const code = request.nextUrl.searchParams.get('code')
@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
     const errorParam = request.nextUrl.searchParams.get('error')
 
     if (errorParam) {
-      return NextResponse.redirect(`${accountsUrl}&mp_error=denied`)
+      return NextResponse.redirect(`${accountsUrl}?mp_error=denied`)
     }
 
     const cookieState = request.cookies.get('mp_oauth_state')?.value
@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
     const cookieUserId = request.cookies.get('mp_oauth_user')?.value
 
     if (!code || !state || !cookieState || state !== cookieState || !cookieUserId) {
-      return NextResponse.redirect(`${accountsUrl}&mp_error=state`)
+      return NextResponse.redirect(`${accountsUrl}?mp_error=state`)
     }
 
     const supabase = await createClient()
@@ -102,13 +102,13 @@ export async function GET(request: NextRequest) {
       account_id: accountId,
     })
 
-    const response = NextResponse.redirect(`${accountsUrl}&mp=connected`)
+    const response = NextResponse.redirect(`${accountsUrl}?mp=connected`)
     response.cookies.delete('mp_oauth_state')
     response.cookies.delete('mp_oauth_verifier')
     response.cookies.delete('mp_oauth_user')
     return response
   } catch (error) {
     console.error('[mp/callback]', error)
-    return NextResponse.redirect(`${accountsUrl}&mp_error=callback`)
+    return NextResponse.redirect(`${accountsUrl}?mp_error=callback`)
   }
 }

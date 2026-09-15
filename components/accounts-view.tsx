@@ -7,7 +7,8 @@ import {
   updateAccount,
   deleteAccount,
 } from '@/hooks/use-finance-data'
-import type { Account, MercadoPagoStatus } from '@/lib/types'
+import type { Account, AccountKind, MercadoPagoStatus } from '@/lib/types'
+import { TransferDialog } from '@/components/transfer-dialog'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -53,6 +54,7 @@ import {
   Link2,
   RefreshCw,
   Unlink,
+  ArrowRightLeft,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { mutate } from 'swr'
@@ -69,13 +71,13 @@ function formatCurrency(amount: number, currency: string) {
 interface AccountFormData {
   name: string
   currency: 'ARS' | 'USD'
-  balance: string
+  kind: AccountKind
 }
 
 const initialFormData: AccountFormData = {
   name: '',
   currency: 'ARS',
-  balance: '',
+  kind: 'available',
 }
 
 export function AccountsView() {
@@ -90,6 +92,7 @@ export function AccountsView() {
   const [mpLoading, setMpLoading] = useState(true)
   const [mpSyncing, setMpSyncing] = useState(false)
   const [mpMessage, setMpMessage] = useState<string | null>(null)
+  const [transferOpen, setTransferOpen] = useState(false)
 
   const loadMpStatus = useCallback(async () => {
     try {
@@ -132,7 +135,7 @@ export function AccountsView() {
     setFormData({
       name: account.name,
       currency: account.currency,
-      balance: account.balance.toString(),
+      kind: account.kind || 'available',
     })
     setIsDialogOpen(true)
   }
@@ -145,16 +148,19 @@ export function AccountsView() {
   const handleSubmit = async () => {
     setIsSaving(true)
     try {
-      const accountData = {
-        name: formData.name,
-        currency: formData.currency,
-        balance: parseFloat(formData.balance) || 0,
-      }
-
       if (editingAccount) {
-        await updateAccount(editingAccount.id, accountData)
+        await updateAccount(editingAccount.id, {
+          name: formData.name,
+          currency: formData.currency,
+          kind: formData.kind,
+        })
       } else {
-        await createAccount(accountData)
+        await createAccount({
+          name: formData.name,
+          currency: formData.currency,
+          balance: 0,
+          kind: formData.kind,
+        })
       }
 
       setIsDialogOpen(false)
@@ -225,19 +231,27 @@ export function AccountsView() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Cuentas</h1>
-          <p className="text-muted-foreground">Gestiona tus cuentas bancarias y efectivo</p>
+          <h1 className="text-2xl font-bold text-foreground md:text-3xl">Cuentas</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            El saldo solo cambia con ingresos, gastos y traspasos.
+          </p>
         </div>
-        <Button onClick={handleOpenCreate} className="bg-emerald-500 hover:bg-emerald-600">
-          <Plus className="h-4 w-4 mr-2" />
-          Nueva Cuenta
-        </Button>
+        <div className="flex w-full flex-col gap-2 sm:flex-row md:w-auto">
+          <Button variant="outline" onClick={() => setTransferOpen(true)} className="w-full md:w-auto">
+            <ArrowRightLeft className="h-4 w-4 mr-2" />
+            Traspaso
+          </Button>
+          <Button onClick={handleOpenCreate} className="w-full bg-emerald-500 hover:bg-emerald-600 md:w-auto">
+            <Plus className="h-4 w-4 mr-2" />
+            Nueva Cuenta
+          </Button>
+        </div>
       </div>
 
       {/* Mercado Pago */}
-      <Card className="border-sky-500/20 bg-sky-500/5">
+      {/* <Card className="border-sky-500/20 bg-sky-500/5">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
             <Link2 className="h-5 w-5 text-sky-400" />
@@ -305,7 +319,7 @@ export function AccountsView() {
             </p>
           )}
         </CardContent>
-      </Card>
+      </Card> */}
 
       <Card className="border-border/50 bg-card/50">
         <CardHeader>
@@ -320,10 +334,63 @@ export function AccountsView() {
               No hay cuentas. Crea una nueva cuenta para comenzar.
             </div>
           ) : (
+            <>
+              <div className="space-y-3 md:hidden">
+                {accounts.map((account) => (
+                  <div
+                    key={account.id}
+                    className="rounded-xl border border-border/50 bg-background/40 p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-semibold truncate">{account.name}</p>
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          <span
+                            className={cn(
+                              'px-2 py-0.5 rounded text-xs font-medium',
+                              account.kind === 'savings'
+                                ? 'bg-blue-500/10 text-blue-400'
+                                : 'bg-emerald-500/10 text-emerald-400',
+                            )}
+                          >
+                            {account.kind === 'savings' ? 'Ahorros' : 'Disponible'}
+                          </span>
+                          <span className="px-2 py-0.5 rounded text-xs font-medium bg-muted text-muted-foreground">
+                            {account.currency}
+                          </span>
+                        </div>
+                      </div>
+                      <p
+                        className={cn(
+                          'text-lg font-bold shrink-0',
+                          Number(account.balance) >= 0 ? 'text-emerald-400' : 'text-red-400',
+                        )}
+                      >
+                        {formatCurrency(Number(account.balance), account.currency)}
+                      </p>
+                    </div>
+                    <div className="mt-3 flex justify-end gap-1">
+                      <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(account)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleOpenDelete(account.id)}
+                        className="text-red-400 hover:text-red-300"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="hidden md:block">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Nombre</TableHead>
+                  <TableHead>Tipo</TableHead>
                   <TableHead>Origen</TableHead>
                   <TableHead>Moneda</TableHead>
                   <TableHead className="text-right">Saldo</TableHead>
@@ -334,6 +401,18 @@ export function AccountsView() {
                 {accounts.map((account) => (
                   <TableRow key={account.id}>
                     <TableCell className="font-medium">{account.name}</TableCell>
+                    <TableCell>
+                      <span
+                        className={cn(
+                          'px-2 py-1 rounded text-xs font-medium',
+                          account.kind === 'savings'
+                            ? 'bg-blue-500/10 text-blue-400'
+                            : 'bg-emerald-500/10 text-emerald-400',
+                        )}
+                      >
+                        {account.kind === 'savings' ? 'Ahorros' : 'Disponible'}
+                      </span>
+                    </TableCell>
                     <TableCell>
                       <span
                         className={cn(
@@ -389,6 +468,8 @@ export function AccountsView() {
                 ))}
               </TableBody>
             </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
@@ -416,6 +497,7 @@ export function AccountsView() {
                 onValueChange={(value: 'ARS' | 'USD') =>
                   setFormData({ ...formData, currency: value })
                 }
+                disabled={Boolean(editingAccount)}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -427,14 +509,34 @@ export function AccountsView() {
               </Select>
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">Saldo</label>
-              <Input
-                type="number"
-                value={formData.balance}
-                onChange={(e) => setFormData({ ...formData, balance: e.target.value })}
-                placeholder="0"
-              />
+              <label className="text-sm font-medium">Tipo</label>
+              <Select
+                value={formData.kind}
+                onValueChange={(value: AccountKind) => setFormData({ ...formData, kind: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="available">Disponible (gastos del mes)</SelectItem>
+                  <SelectItem value="savings">Ahorros</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
+            {editingAccount && (
+              <p className="text-sm text-muted-foreground">
+                Saldo actual:{' '}
+                <span className="font-medium text-foreground">
+                  {formatCurrency(Number(editingAccount.balance), editingAccount.currency)}
+                </span>
+                . Para cambiarlo usá un ingreso, un gasto o un traspaso.
+              </p>
+            )}
+            {!editingAccount && (
+              <p className="text-sm text-muted-foreground">
+                Empieza en $0. El saldo se arma con cobros, gastos y traspasos.
+              </p>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
@@ -479,6 +581,7 @@ export function AccountsView() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <TransferDialog open={transferOpen} onOpenChange={setTransferOpen} />
     </div>
   )
 }

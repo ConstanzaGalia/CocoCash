@@ -6,16 +6,15 @@ import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import {
   LayoutDashboard,
-  Wallet,
-  CreditCard,
   Receipt,
-  CalendarCheck,
   ChevronLeft,
   ChevronRight,
   Menu,
   X,
   LogOut,
   FileText,
+  PiggyBank,
+  TrendingUp,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Logo } from '@/components/logo'
@@ -27,12 +26,11 @@ interface SidebarProps {
 }
 
 const navItems = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'accounts', label: 'Cuentas', icon: Wallet },
-  { id: 'subscriptions', label: 'Suscripciones', icon: CalendarCheck },
-  { id: 'cards', label: 'Tarjetas', icon: CreditCard },
-  { id: 'transactions', label: 'Transacciones', icon: Receipt },
-  { id: 'fixed-expenses', label: 'Gastos Fijos', icon: FileText },
+  { id: 'dashboard', label: 'Inicio', icon: LayoutDashboard },
+  { id: 'income', label: 'Ingresos', icon: TrendingUp },
+  { id: 'savings', label: 'Ahorros', icon: PiggyBank },
+  { id: 'fixed-expenses', label: 'Fijos', icon: FileText },
+  { id: 'transactions', label: 'Movimientos', icon: Receipt },
 ]
 
 export function Sidebar({ activeTab, onTabChange, userEmail }: SidebarProps) {
@@ -48,20 +46,24 @@ export function Sidebar({ activeTab, onTabChange, userEmail }: SidebarProps) {
 
   return (
     <>
-      {/* Mobile Toggle */}
-      <Button
-        variant="ghost"
-        size="icon"
-        className="fixed top-4 left-4 z-50 md:hidden"
-        onClick={() => setMobileOpen(!mobileOpen)}
-      >
-        {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-      </Button>
+      {/* Mobile top bar */}
+      <header className="fixed inset-x-0 top-0 z-40 flex h-14 items-center justify-between border-b border-sidebar-border bg-background/95 px-2 backdrop-blur md:hidden">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="shrink-0"
+          onClick={() => setMobileOpen(true)}
+          aria-label="Abrir menú"
+        >
+          <Menu className="h-5 w-5" />
+        </Button>
+        <Logo size={40} />
+      </header>
 
       {/* Mobile Overlay */}
       {mobileOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          className="fixed inset-0 z-40 bg-black/50 md:hidden"
           onClick={() => setMobileOpen(false)}
         />
       )}
@@ -69,18 +71,28 @@ export function Sidebar({ activeTab, onTabChange, userEmail }: SidebarProps) {
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed left-0 top-0 z-40 h-screen bg-sidebar border-r border-sidebar-border transition-all duration-300',
+          'fixed left-0 top-0 z-50 h-screen bg-sidebar border-r border-sidebar-border transition-all duration-300',
           collapsed ? 'w-16' : 'w-64',
           mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
         )}
       >
         <div className="flex flex-col h-full">
-          {/* Logo */}
-          <div className={cn(
-            'flex items-center h-16 px-4 border-b border-sidebar-border',
-            collapsed ? 'justify-center' : 'gap-3'
-          )}>
-<Logo size={32} showText={!collapsed} textClassName="text-lg" />
+          <div
+            className={cn(
+              'flex items-center border-b border-sidebar-border px-3',
+              collapsed ? 'h-16 justify-center' : 'h-20 justify-between gap-2',
+            )}
+          >
+            <Button
+              variant="ghost"
+              size="icon"
+              className="shrink-0 md:hidden"
+              onClick={() => setMobileOpen(false)}
+              aria-label="Cerrar menú"
+            >
+              <X className="h-5 w-5" />
+            </Button>
+            <Logo size={collapsed ? 36 : 52} />
           </div>
 
           {/* Navigation */}
@@ -152,9 +164,9 @@ export function Sidebar({ activeTab, onTabChange, userEmail }: SidebarProps) {
       </aside>
 
       {/* Mobile Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-sidebar border-t border-sidebar-border md:hidden">
-        <div className="flex justify-around py-2 overflow-x-auto">
-          {navItems.slice(0, 5).map((item) => {
+      <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-sidebar-border bg-sidebar pb-[env(safe-area-inset-bottom)] md:hidden">
+        <div className="flex items-stretch">
+          {navItems.map((item) => {
             const Icon = item.icon
             const isActive = activeTab === item.id
             return (
@@ -162,12 +174,12 @@ export function Sidebar({ activeTab, onTabChange, userEmail }: SidebarProps) {
                 key={item.id}
                 onClick={() => onTabChange(item.id)}
                 className={cn(
-                  'flex flex-col items-center gap-1 px-2 py-2 rounded-lg transition-colors min-w-0',
-                  isActive ? 'text-emerald-500' : 'text-sidebar-foreground'
+                  'flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1 py-2.5 transition-colors',
+                  isActive ? 'text-emerald-500' : 'text-sidebar-foreground',
                 )}
               >
-                <Icon className="w-5 h-5" />
-                <span className="text-[10px] truncate">{item.label}</span>
+                <Icon className="h-5 w-5 shrink-0" />
+                <span className="max-w-full truncate text-[10px] leading-tight">{item.label}</span>
               </button>
             )
           })}

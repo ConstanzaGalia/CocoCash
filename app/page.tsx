@@ -9,7 +9,7 @@ export default function Home() {
       {/* Header */}
       <header className="border-b border-border/50">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <Logo size={36} textClassName="text-xl" />
+          <Logo size={56} />
           <div className="flex items-center gap-3">
             <Link href="/auth/login">
               <Button variant="ghost">Iniciar sesion</Button>
@@ -31,8 +31,8 @@ export default function Home() {
             <span className="text-emerald-500"> de forma inteligente</span>
           </h1>
           <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-10">
-            Controla tus cuentas, suscripciones, tarjetas de credito y gastos fijos en un solo lugar. 
-            Nunca mas olvides un pago importante.
+            Controlá tus cobros, gastos fijos y movimientos en un solo lugar.
+            Nunca más te quedes sin saber qué te queda del mes.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link href="/auth/sign-up">

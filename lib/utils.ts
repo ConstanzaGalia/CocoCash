@@ -5,11 +5,26 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+export function formatCurrency(amount: number, currency: string = 'ARS') {
+  return new Intl.NumberFormat('es-AR', {
+    style: 'currency',
+    currency,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount)
+}
+
 /** Clave de mes YYYY-MM */
 export function toMonthKey(date: Date = new Date()): string {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
   return `${year}-${month}`
+}
+
+/** Toma YYYY-MM de una fecha ISO o Date, sin corrimiento de huso */
+export function dateToMonthKey(date: string | Date): string {
+  if (typeof date === 'string' && /^\d{4}-\d{2}/.test(date)) return date.slice(0, 7)
+  return toMonthKey(typeof date === 'string' ? new Date(date) : date)
 }
 
 /** Etiqueta legible: "julio 2026" */

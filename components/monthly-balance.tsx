@@ -1,35 +1,25 @@
 'use client'
 
+import { useMemo, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
+import { Button } from '@/components/ui/button'
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts'
-import { Transaction } from '@/lib/types'
-
-function formatCurrency(amount: number, currency: string = 'ARS') {
-  return new Intl.NumberFormat('es-AR', {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount)
-}
+import type { Currency, Transaction } from '@/lib/types'
+import { formatCurrency } from '@/lib/utils'
 
 const MONTH_LABELS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 
 interface MonthlyBalanceProps {
   transactions: Transaction[]
-  currency?: 'ARS' | 'USD'
 }
 
-export function MonthlyBalance({ transactions, currency = 'ARS' }: MonthlyBalanceProps) {
+function buildSeries(transactions: Transaction[], currency: Currency) {
   const now = new Date()
-
-  // Construir los ultimos 6 meses
-  const months: { key: string; label: string; year: number; month: number }[] = []
+  const months: { label: string; year: number; month: number }[] = []
   for (let i = 5; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
     months.push({
-      key: `${d.getFullYear()}-${d.getMonth()}`,
       label: MONTH_LABELS[d.getMonth()],
       year: d.getFullYear(),
       month: d.getMonth(),
@@ -37,8 +27,7 @@ export function MonthlyBalance({ transactions, currency = 'ARS' }: MonthlyBalanc
   }
 
   const filtered = transactions.filter((t) => t.currency === currency)
-
-  const data = months.map((m) => {
+  return months.map((m) => {
     const monthTx = filtered.filter((t) => {
       const date = new Date(t.date)
       return date.getFullYear() === m.year && date.getMonth() === m.month
@@ -47,7 +36,15 @@ export function MonthlyBalance({ transactions, currency = 'ARS' }: MonthlyBalanc
     const gastos = monthTx.filter((t) => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0)
     return { mes: m.label, ingresos, gastos, balance: ingresos - gastos }
   })
+}
 
+export function MonthlyBalance({ transactions }: MonthlyBalanceProps) {
+  const hasUsd = useMemo(
+    () => transactions.some((tx) => tx.currency === 'USD'),
+    [transactions],
+  )
+  const [currency, setCurrency] = useState<Currency>('ARS')
+  const data = useMemo(() => buildSeries(transactions, currency), [transactions, currency])
   const current = data[data.length - 1]
   const netBalance = current.balance
   const isPositive = netBalance >= 0
@@ -59,7 +56,6 @@ export function MonthlyBalance({ transactions, currency = 'ARS' }: MonthlyBalanc
 
   return (
     <div className="grid gap-4 lg:grid-cols-3">
-      {/* Balance neto del mes */}
       <Card
         className={
           isPositive
@@ -69,9 +65,9 @@ export function MonthlyBalance({ transactions, currency = 'ARS' }: MonthlyBalanc
       >
         <CardHeader className="pb-2">
           <CardTitle className={`text-sm font-medium ${isPositive ? 'text-emerald-400' : 'text-red-400'}`}>
-            Balance neto del mes ({currency})
+            Resultado del mes ({currency})
           </CardTitle>
-          <CardDescription>Ingresos menos gastos de este mes</CardDescription>
+          <CardDescription>Cobros menos gastos de este mes. No es el disponible.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className={`text-3xl font-bold ${isPositive ? 'text-emerald-400' : 'text-red-400'}`}>
@@ -91,14 +87,33 @@ export function MonthlyBalance({ transactions, currency = 'ARS' }: MonthlyBalanc
         </CardContent>
       </Card>
 
-      {/* Grafico evolucion */}
       <Card className="lg:col-span-2 border-border/50 bg-card/50">
         <CardHeader className="pb-2">
-          <CardTitle className="text-lg">Evolucion mensual</CardTitle>
-          <CardDescription>Ingresos vs gastos de los ultimos 6 meses ({currency})</CardDescription>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <CardTitle className="text-lg">Evolucion mensual</CardTitle>
+              <CardDescription>Ingresos vs gastos de los ultimos 6 meses</CardDescription>
+            </div>
+            {hasUsd && (
+              <div className="flex gap-1 shrink-0">
+                {(['ARS', 'USD'] as Currency[]).map((item) => (
+                  <Button
+                    key={item}
+                    type="button"
+                    variant={currency === item ? 'default' : 'outline'}
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                    onClick={() => setCurrency(item)}
+                  >
+                    {item}
+                  </Button>
+                ))}
+              </div>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
-          <ChartContainer config={chartConfig} className="h-[220px] w-full">
+          <ChartContainer config={chartConfig} className="aspect-auto h-[220px] w-full">
             <BarChart data={data} accessibilityLayer>
               <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-border/40" />
               <XAxis dataKey="mes" tickLine={false} axisLine={false} tickMargin={8} />
@@ -113,7 +128,14 @@ export function MonthlyBalance({ transactions, currency = 'ARS' }: MonthlyBalanc
                 }}
               />
               <ChartTooltip
-                content={<ChartTooltipContent formatter={(value, name) => [formatCurrency(Number(value), currency), name === 'ingresos' ? ' Ingresos' : ' Gastos']} />}
+                content={
+                  <ChartTooltipContent
+                    formatter={(value, name) => [
+                      formatCurrency(Number(value), currency),
+                      name === 'ingresos' ? ' Ingresos' : ' Gastos',
+                    ]}
+                  />
+                }
               />
               <Bar dataKey="ingresos" fill="var(--color-ingresos)" radius={[4, 4, 0, 0]} />
               <Bar dataKey="gastos" fill="var(--color-gastos)" radius={[4, 4, 0, 0]} />

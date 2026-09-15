@@ -1,13 +1,24 @@
 'use client'
 
-import { useState } from 'react'
-import { useTransactions, useAccounts, createTransaction, updateTransaction, deleteTransaction, toggleTransactionPaid } from '@/hooks/use-finance-data'
-import type { Transaction } from '@/lib/types'
+import { useMemo, useState } from 'react'
+import {
+  deleteTransaction,
+  deleteTransfer,
+  getWallet,
+  updateTransaction,
+  useAccounts,
+  useTransactions,
+  useTransfers,
+  walletName,
+} from '@/hooks/use-finance-data'
+import type { Transaction, Transfer } from '@/lib/types'
 import { CATEGORIES } from '@/lib/types'
+import { CategoryPicker, mergeCategories } from '@/components/category-picker'
+import { cn, dateToMonthKey, formatCurrency, formatMonthLabel, toMonthKey } from '@/lib/utils'
+import { MonthPicker } from '@/components/month-picker'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
   DialogContent,
@@ -23,14 +34,6 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -41,105 +44,108 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Plus, Pencil, Trash2, Receipt, ArrowUpRight, ArrowDownRight, Loader2 } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { Pencil, Trash2, ArrowUpRight, ArrowDownRight, ArrowRightLeft, Loader2 } from 'lucide-react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 
-function formatCurrency(amount: number, currency: string) {
-  return new Intl.NumberFormat('es-AR', {
-    style: 'currency',
-    currency: currency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount)
-}
+type Filter = 'all' | 'income' | 'expense' | 'transfer'
 
-interface TransactionFormData {
+type CashItem =
+  | { kind: 'tx'; id: string; date: string; tx: Transaction }
+  | { kind: 'transfer'; id: string; date: string; transfer: Transfer }
+
+interface ExpenseFormData {
   amount: string
   category: string
   date: string
   description: string
-  is_paid: boolean
-  account_id: string
   currency: 'ARS' | 'USD'
-  type: 'income' | 'expense'
 }
 
-const initialFormData: TransactionFormData = {
+const initialFormData: ExpenseFormData = {
   amount: '',
-  category: 'Otros',
+  category: 'Comida',
   date: new Date().toISOString().split('T')[0],
   description: '',
-  is_paid: true,
-  account_id: '',
   currency: 'ARS',
-  type: 'expense',
 }
 
 export function TransactionsView() {
-  const { transactions, isLoading } = useTransactions()
+  const { transactions, isLoading: loadingTx } = useTransactions()
+  const { transfers, isLoading: loadingTransfers } = useTransfers()
   const { accounts } = useAccounts()
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [isDeleteOpen, setIsDeleteOpen] = useState(false)
+  const [filter, setFilter] = useState<Filter>('all')
+  const currentMonthKey = toMonthKey()
+  const [monthKey, setMonthKey] = useState(currentMonthKey)
+  const isCurrentMonth = monthKey === currentMonthKey
   const [editingTx, setEditingTx] = useState<Transaction | null>(null)
-  const [deletingId, setDeletingId] = useState<string | null>(null)
-  const [formData, setFormData] = useState<TransactionFormData>(initialFormData)
-  const [filterType, setFilterType] = useState<'all' | 'income' | 'expense'>('all')
+  const [formData, setFormData] = useState<ExpenseFormData>(initialFormData)
   const [isSaving, setIsSaving] = useState(false)
+  const [deleting, setDeleting] = useState<{ type: 'tx' | 'transfer'; id: string } | null>(null)
 
-  const handleOpenCreate = () => {
-    setEditingTx(null)
-    setFormData({
-      ...initialFormData,
-      account_id: accounts[0]?.id || '',
-    })
-    setIsDialogOpen(true)
+  const accountName = (id: string) => {
+    const account = accounts.find((item) => item.id === id)
+    if (!account) return 'Bolsillo'
+    return walletName(account.kind || 'available', account.currency)
   }
 
+  const items = useMemo<CashItem[]>(() => {
+    const txItems: CashItem[] = transactions.map((tx) => ({
+      kind: 'tx',
+      id: tx.id,
+      date: tx.date,
+      tx,
+    }))
+    const transferItems: CashItem[] = transfers.map((transfer) => ({
+      kind: 'transfer',
+      id: transfer.id,
+      date: transfer.date,
+      transfer,
+    }))
+    return [...txItems, ...transferItems].sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+    )
+  }, [transactions, transfers])
+
+  const monthItems = items.filter((item) => dateToMonthKey(item.date) === monthKey)
+
+  const filtered = monthItems.filter((item) => {
+    if (filter === 'all') return true
+    if (filter === 'transfer') return item.kind === 'transfer'
+    return item.kind === 'tx' && item.tx.type === filter
+  })
+
+  const categoryOptions = mergeCategories(
+    CATEGORIES.expense,
+    transactions.filter((tx) => tx.type === 'expense').map((tx) => tx.category),
+  )
+
   const handleOpenEdit = (tx: Transaction) => {
+    if (tx.type !== 'expense') return
     setEditingTx(tx)
     setFormData({
       amount: tx.amount.toString(),
       category: tx.category,
       date: tx.date.split('T')[0],
       description: tx.description || '',
-      is_paid: tx.is_paid,
-      account_id: tx.account_id || '',
       currency: tx.currency,
-      type: tx.type,
     })
-    setIsDialogOpen(true)
-  }
-
-  const handleOpenDelete = (id: string) => {
-    setDeletingId(id)
-    setIsDeleteOpen(true)
   }
 
   const handleSubmit = async () => {
+    if (!editingTx) return
     setIsSaving(true)
     try {
-      const txData = {
+      const wallet = await getWallet('available', formData.currency)
+      await updateTransaction(editingTx.id, {
         amount: parseFloat(formData.amount) || 0,
         category: formData.category,
         date: formData.date,
         description: formData.description || null,
-        is_paid: formData.is_paid,
-        account_id: formData.account_id || null,
-        credit_card_id: null,
         currency: formData.currency,
-        type: formData.type,
-      }
-
-      if (editingTx) {
-        await updateTransaction(editingTx.id, txData)
-      } else {
-        await createTransaction(txData)
-      }
-
-      setIsDialogOpen(false)
-      setFormData(initialFormData)
+        type: 'expense',
+        account_id: wallet.id,
+      })
       setEditingTx(null)
     } catch (error) {
       console.error('Error saving transaction:', error)
@@ -149,38 +155,17 @@ export function TransactionsView() {
   }
 
   const handleDelete = async () => {
-    if (deletingId) {
-      try {
-        await deleteTransaction(deletingId)
-        setIsDeleteOpen(false)
-        setDeletingId(null)
-      } catch (error) {
-        console.error('Error deleting transaction:', error)
-      }
-    }
-  }
-
-  const handleTogglePaid = async (id: string, isPaid: boolean) => {
+    if (!deleting) return
     try {
-      await toggleTransactionPaid(id, isPaid)
+      if (deleting.type === 'tx') await deleteTransaction(deleting.id)
+      else await deleteTransfer(deleting.id)
+      setDeleting(null)
     } catch (error) {
-      console.error('Error toggling paid status:', error)
+      console.error('Error deleting movement:', error)
     }
   }
 
-  const getAccountName = (accountId: string | null) => {
-    if (!accountId) return 'Sin cuenta'
-    return accounts.find(a => a.id === accountId)?.name || 'Sin cuenta'
-  }
-
-  const filteredTransactions = transactions.filter(tx => {
-    if (filterType === 'all') return true
-    return tx.type === filterType
-  })
-
-  const categories = formData.type === 'income' ? CATEGORIES.income : CATEGORIES.expense
-
-  if (isLoading) {
+  if (loadingTx || loadingTransfers) {
     return (
       <div className="space-y-6">
         <Skeleton className="h-8 w-48" />
@@ -191,168 +176,184 @@ export function TransactionsView() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Transacciones</h1>
-          <p className="text-muted-foreground">Gestiona tus ingresos y gastos</p>
+          <h1 className="text-2xl font-bold text-foreground md:text-3xl">Movimientos</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {isCurrentMonth
+              ? 'Flujo de caja: cobros, gastos y traspasos. Cargá uno nuevo con el botón +.'
+              : `Cobros, gastos y traspasos de ${formatMonthLabel(monthKey)}.`}
+          </p>
+          {!isCurrentMonth && (
+            <button
+              type="button"
+              className="mt-1 text-xs text-emerald-400 hover:underline"
+              onClick={() => setMonthKey(currentMonthKey)}
+            >
+              Volver al mes actual
+            </button>
+          )}
         </div>
-        <Button onClick={handleOpenCreate} className="bg-emerald-500 hover:bg-emerald-600">
-          <Plus className="h-4 w-4 mr-2" />
-          Nueva Transaccion
-        </Button>
+        <MonthPicker value={monthKey} onChange={setMonthKey} />
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-2">
-        <Button
-          variant={filterType === 'all' ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => setFilterType('all')}
-        >
-          Todas
-        </Button>
-        <Button
-          variant={filterType === 'income' ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => setFilterType('income')}
-          className={filterType === 'income' ? 'bg-emerald-500 hover:bg-emerald-600' : ''}
-        >
-          <ArrowUpRight className="h-4 w-4 mr-1" />
-          Ingresos
-        </Button>
-        <Button
-          variant={filterType === 'expense' ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => setFilterType('expense')}
-          className={filterType === 'expense' ? 'bg-red-500 hover:bg-red-600' : ''}
-        >
-          <ArrowDownRight className="h-4 w-4 mr-1" />
-          Gastos
-        </Button>
+      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+        {(
+          [
+            { id: 'all', label: 'Todos' },
+            { id: 'income', label: 'Entradas' },
+            { id: 'expense', label: 'Salidas' },
+            { id: 'transfer', label: 'Traspasos' },
+          ] as const
+        ).map((item) => (
+          <Button
+            key={item.id}
+            variant={filter === item.id ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setFilter(item.id)}
+            className={
+              filter === item.id && item.id === 'income'
+                ? 'bg-emerald-500 hover:bg-emerald-600'
+                : filter === item.id && item.id === 'expense'
+                  ? 'bg-red-500 hover:bg-red-600'
+                  : undefined
+            }
+          >
+            {item.label}
+          </Button>
+        ))}
       </div>
 
       <Card className="border-border/50 bg-card/50">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Receipt className="h-5 w-5 text-blue-500" />
-            Todas las Transacciones
+          <CardTitle className="text-base capitalize">
+            Flujo de caja · {isCurrentMonth ? 'este mes' : formatMonthLabel(monthKey)}
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {filteredTransactions.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              No hay transacciones. Crea una nueva transaccion para comenzar.
-            </div>
+          {filtered.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              {monthItems.length === 0
+                ? isCurrentMonth
+                  ? 'Todavía no hay movimientos. Usá el + para un cobro o un gasto.'
+                  : `No hay movimientos en ${formatMonthLabel(monthKey)}.`
+                : 'No hay movimientos con este filtro.'}
+            </p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-12">Pagado</TableHead>
-                  <TableHead>Descripcion</TableHead>
-                  <TableHead>Categoria</TableHead>
-                  <TableHead>Fecha</TableHead>
-                  <TableHead>Cuenta</TableHead>
-                  <TableHead className="text-right">Monto</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredTransactions.map((tx) => (
-                  <TableRow 
-                    key={tx.id}
-                    className={cn(!tx.is_paid && 'opacity-60')}
-                  >
-                    <TableCell>
-                      <Checkbox
-                        checked={tx.is_paid}
-                        onCheckedChange={(checked) => handleTogglePaid(tx.id, checked as boolean)}
-                      />
-                    </TableCell>
-                    <TableCell className={cn(
-                      'font-medium',
-                      !tx.is_paid && 'line-through'
-                    )}>
-                      <div className="flex items-center gap-2">
-                        {tx.type === 'income' ? (
-                          <ArrowUpRight className="h-4 w-4 text-emerald-400" />
-                        ) : (
-                          <ArrowDownRight className="h-4 w-4 text-red-400" />
-                        )}
-                        {tx.description || tx.category}
+            <div className="space-y-3">
+              {filtered.map((item) => {
+                if (item.kind === 'transfer') {
+                  const { transfer } = item
+                  const isFx = transfer.currency !== transfer.to_currency
+                  return (
+                    <div
+                      key={`tr-${item.id}`}
+                      className="rounded-xl border border-border/50 bg-background/40 p-4"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <ArrowRightLeft className="h-4 w-4 shrink-0 text-blue-400" />
+                            <p className="font-medium truncate">
+                              {accountName(transfer.from_account_id)} → {accountName(transfer.to_account_id)}
+                            </p>
+                          </div>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Traspaso · {format(new Date(transfer.date), 'dd MMM yyyy', { locale: es })}
+                            {transfer.notes ? ` · ${transfer.notes}` : ''}
+                          </p>
+                        </div>
+                        <p className="text-sm font-bold shrink-0 text-blue-400 text-right">
+                          -{formatCurrency(Number(transfer.amount), transfer.currency)}
+                          {isFx && (
+                            <>
+                              <br />
+                              +{formatCurrency(Number(transfer.to_amount), transfer.to_currency)}
+                            </>
+                          )}
+                        </p>
                       </div>
-                    </TableCell>
-                    <TableCell>
-                      <span className="px-2 py-1 rounded text-xs font-medium bg-secondary text-secondary-foreground">
-                        {tx.category}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {format(new Date(tx.date), 'dd MMM yyyy', { locale: es })}
-                    </TableCell>
-                    <TableCell>{getAccountName(tx.account_id)}</TableCell>
-                    <TableCell className={cn(
-                      'text-right font-medium',
-                      tx.type === 'income' ? 'text-emerald-400' : 'text-red-400'
-                    )}>
-                      {tx.type === 'income' ? '+' : '-'}{formatCurrency(Number(tx.amount), tx.currency)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
+                      <div className="mt-3 flex justify-end">
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => handleOpenEdit(tx)}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleOpenDelete(tx.id)}
+                          onClick={() => setDeleting({ type: 'transfer', id: transfer.id })}
                           className="text-red-400 hover:text-red-300"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                    </div>
+                  )
+                }
+
+                const { tx } = item
+                const isIncome = tx.type === 'income'
+                return (
+                  <div
+                    key={`tx-${item.id}`}
+                    className="rounded-xl border border-border/50 bg-background/40 p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          {isIncome ? (
+                            <ArrowUpRight className="h-4 w-4 shrink-0 text-emerald-400" />
+                          ) : (
+                            <ArrowDownRight className="h-4 w-4 shrink-0 text-red-400" />
+                          )}
+                          <p className="font-medium truncate">{tx.description || tx.category}</p>
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {isIncome ? 'Cobro' : tx.category} ·{' '}
+                          {format(new Date(tx.date), 'dd MMM yyyy', { locale: es })} · {tx.currency}
+                        </p>
+                      </div>
+                      <p
+                        className={cn(
+                          'text-base font-bold shrink-0',
+                          isIncome ? 'text-emerald-400' : 'text-red-400',
+                        )}
+                      >
+                        {isIncome ? '+' : '-'}
+                        {formatCurrency(Number(tx.amount), tx.currency)}
+                      </p>
+                    </div>
+                    <div className="mt-3 flex justify-end gap-1">
+                      {!isIncome && (
+                        <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(tx)}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setDeleting({ type: 'tx', id: tx.id })}
+                        className="text-red-400 hover:text-red-300"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Create/Edit Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      <Dialog open={Boolean(editingTx)} onOpenChange={(open) => !open && setEditingTx(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>
-              {editingTx ? 'Editar Transaccion' : 'Nueva Transaccion'}
-            </DialogTitle>
+            <DialogTitle>Editar gasto</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium">Tipo</label>
-              <Select
-                value={formData.type}
-                onValueChange={(value: 'income' | 'expense') => setFormData({ ...formData, type: value, category: value === 'income' ? 'Salario' : 'Otros' })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="income">Ingreso</SelectItem>
-                  <SelectItem value="expense">Gasto</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Descripcion</label>
+              <label className="text-sm font-medium">Descripción</label>
               <Input
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="Ej: Supermercado, Sueldo"
+                placeholder="Ej: supermercado"
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -362,7 +363,6 @@ export function TransactionsView() {
                   type="number"
                   value={formData.amount}
                   onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                  placeholder="0"
                 />
               </div>
               <div className="space-y-2">
@@ -383,20 +383,12 @@ export function TransactionsView() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Categoria</label>
-                <Select
+                <label className="text-sm font-medium">Categoría</label>
+                <CategoryPicker
                   value={formData.category}
-                  onValueChange={(value) => setFormData({ ...formData, category: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.map((cat) => (
-                      <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  onChange={(value) => setFormData({ ...formData, category: value })}
+                  options={categoryOptions}
+                />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Fecha</label>
@@ -407,62 +399,34 @@ export function TransactionsView() {
                 />
               </div>
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Cuenta (opcional)</label>
-              <Select
-                value={formData.account_id}
-                onValueChange={(value) => setFormData({ ...formData, account_id: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar cuenta" />
-                </SelectTrigger>
-                <SelectContent>
-                  {accounts.map((account) => (
-                    <SelectItem key={account.id} value={account.id}>
-                      {account.name} ({account.currency})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+            <Button variant="outline" onClick={() => setEditingTx(null)}>
               Cancelar
             </Button>
-            <Button 
+            <Button
               onClick={handleSubmit}
               disabled={!formData.amount || isSaving}
               className="bg-emerald-500 hover:bg-emerald-600"
             >
-              {isSaving ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Guardando...
-                </>
-              ) : (
-                editingTx ? 'Guardar' : 'Crear'
-              )}
+              {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+              Guardar
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation */}
-      <AlertDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+      <AlertDialog open={Boolean(deleting)} onOpenChange={(open) => !open && setDeleting(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Eliminar Transaccion</AlertDialogTitle>
+            <AlertDialogTitle>Eliminar movimiento</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta accion no se puede deshacer. Se eliminara la transaccion permanentemente.
+              Se revierte del disponible o del ahorro. Esta acción no se puede deshacer.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              className="bg-red-500 hover:bg-red-600"
-            >
+            <AlertDialogAction onClick={handleDelete} className="bg-red-500 hover:bg-red-600">
               Eliminar
             </AlertDialogAction>
           </AlertDialogFooter>

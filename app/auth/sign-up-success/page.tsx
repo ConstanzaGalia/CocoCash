@@ -8,7 +8,7 @@ export default function SignUpSuccessPage() {
     <div className="flex min-h-svh w-full items-center justify-center bg-background p-6 md:p-10">
       <div className="w-full max-w-sm">
         <div className="flex flex-col gap-6">
-<Logo size={44} className="justify-center" textClassName="text-2xl" />
+<Logo size={80} className="justify-center" />
           <Card className="border-border/50 bg-card/50 backdrop-blur">
             <CardHeader className="text-center">
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/10">

@@ -10,9 +10,11 @@ import {
   recordFixedExpensePayment,
   updateFixedExpensePayment,
   deleteFixedExpensePaymentForMonth,
+  getWallet,
 } from '@/hooks/use-finance-data'
 import type { FixedExpense, FixedExpensePayment } from '@/lib/types'
 import { CATEGORIES } from '@/lib/types'
+import { CategoryPicker, mergeCategories } from '@/components/category-picker'
 import {
   cn,
   toMonthKey,
@@ -225,6 +227,11 @@ export function FixedExpensesView() {
     }
   }
 
+  const categoryOptions = mergeCategories(
+    CATEGORIES.fixedExpense,
+    fixedExpenses.map((expense) => expense.category),
+  )
+
   const handleTogglePaid = async (expense: FixedExpense, checked: boolean) => {
     if (checked) {
       setPayingExpense(expense)
@@ -245,12 +252,16 @@ export function FixedExpensesView() {
     if (!payingExpense) return
     setIsPaying(true)
     try {
+      const wallet = await getWallet('available', payingExpense.currency)
       await recordFixedExpensePayment({
         fixed_expense_id: payingExpense.id,
         month_key: monthKey,
         amount_paid: parseFloat(payAmount) || 0,
         currency: payingExpense.currency,
         notes: payNotes || null,
+        account_id: wallet.id,
+        expense_name: payingExpense.name,
+        category: payingExpense.category,
       })
       setIsPayDialogOpen(false)
       setPayingExpense(null)
@@ -296,14 +307,14 @@ export function FixedExpensesView() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Gastos Fijos</h1>
-          <p className="text-muted-foreground">
-            Checklist de pendientes y movimientos del mes seleccionado
+          <h1 className="text-2xl font-bold text-foreground md:text-3xl">Gastos Fijos</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Alquiler, servicios, tarjetas y todo lo que se paga todos los meses
           </p>
         </div>
-        <Button onClick={handleOpenCreate} className="bg-emerald-500 hover:bg-emerald-600">
+        <Button onClick={handleOpenCreate} className="w-full bg-emerald-500 hover:bg-emerald-600 md:w-auto">
           <Plus className="h-4 w-4 mr-2" />
-          Nuevo Gasto Fijo
+          Nuevo gasto fijo
         </Button>
       </div>
 
@@ -394,7 +405,7 @@ export function FixedExpensesView() {
         <CardContent>
           {fixedExpenses.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              No hay gastos fijos. Crea uno para armar tu checklist mensual.
+              No hay gastos fijos. Creá uno (alquiler, tarjeta, gimnasio, etc.) para armar el checklist del mes.
             </div>
           ) : pendingItems.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
@@ -490,6 +501,73 @@ export function FixedExpensesView() {
               Todavía no hay pagos registrados este mes. Marcá un gasto en la checklist para agregarlo acá.
             </p>
           ) : (
+            <>
+              <div className="space-y-3 md:hidden">
+                {monthlyMovements.map(({ expense, payment }) => (
+                  <div
+                    key={`${payment.id}-${payment.updated_at}`}
+                    className="space-y-3 rounded-xl border border-border/50 bg-background/40 p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-semibold">{expense.name}</p>
+                        <p className="text-xs text-muted-foreground">{expense.category}</p>
+                      </div>
+                      <Checkbox
+                        checked
+                        onCheckedChange={(checked) => {
+                          if (!checked) handleUncheckMovement(expense)
+                        }}
+                        disabled={savingPaymentId === payment.id}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground">Monto</label>
+                        <Input
+                          type="number"
+                          defaultValue={Number(payment.amount_paid)}
+                          className="h-9"
+                          onBlur={(e) => {
+                            const value = parseFloat(e.target.value) || 0
+                            if (value !== Number(payment.amount_paid)) {
+                              handleUpdateMovement(payment, { amount_paid: value })
+                            }
+                          }}
+                          disabled={savingPaymentId === payment.id}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs text-muted-foreground">Fecha</label>
+                        <Input
+                          type="date"
+                          defaultValue={payment.paid_at}
+                          className="h-9"
+                          onBlur={(e) => {
+                            if (e.target.value && e.target.value !== payment.paid_at) {
+                              handleUpdateMovement(payment, { paid_at: e.target.value })
+                            }
+                          }}
+                          disabled={savingPaymentId === payment.id}
+                        />
+                      </div>
+                    </div>
+                    <Input
+                      defaultValue={payment.notes ?? ''}
+                      placeholder="Notas"
+                      className="h-9"
+                      onBlur={(e) => {
+                        const value = e.target.value.trim() || null
+                        if (value !== (payment.notes ?? null)) {
+                          handleUpdateMovement(payment, { notes: value })
+                        }
+                      }}
+                      disabled={savingPaymentId === payment.id}
+                    />
+                  </div>
+                ))}
+              </div>
+              <div className="hidden overflow-x-auto md:block">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -563,6 +641,8 @@ export function FixedExpensesView() {
                 ))}
               </TableBody>
             </Table>
+              </div>
+            </>
           )}
           {monthlyMovements.length > 0 && (
             <div className="flex justify-end mt-3 pt-3 border-t border-border/50">
@@ -600,26 +680,16 @@ export function FixedExpensesView() {
               <Input
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="Ej: Alquiler, Luz, Internet"
+                placeholder="Ej: Alquiler, Tarjeta Galicia, Gimnasio"
               />
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Categoria</label>
-              <Select
+              <CategoryPicker
                 value={formData.category}
-                onValueChange={(value) => setFormData({ ...formData, category: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {CATEGORIES.fixedExpense.map((cat) => (
-                    <SelectItem key={cat} value={cat}>
-                      {cat}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onChange={(value) => setFormData({ ...formData, category: value })}
+                options={categoryOptions}
+              />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">

@@ -8,15 +8,16 @@ interface LogoProps {
   textClassName?: string
 }
 
-export function Logo({ size = 32, showText = true, className, textClassName }: LogoProps) {
+export function Logo({ size = 48, showText = false, className, textClassName }: LogoProps) {
   return (
     <div className={cn('flex items-center gap-2', className)}>
       <Image
-        src="/cocosoft-logo.jpeg"
+        src="/coco-cash-logo.png"
         alt="CocoCash"
-        width={size}
-        height={size}
-        className="rounded-lg object-cover shrink-0"
+        width={1024}
+        height={1024}
+        className="rounded-md bg-white object-contain shrink-0"
+        style={{ height: size, width: 'auto' }}
         priority
       />
       {showText && (

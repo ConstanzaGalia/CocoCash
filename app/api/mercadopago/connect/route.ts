@@ -50,6 +50,6 @@ export async function GET() {
     return response
   } catch (error) {
     console.error('[mp/connect]', error)
-    return NextResponse.redirect(`${origin}/dashboard?view=accounts&mp_error=config`)
+    return NextResponse.redirect(`${origin}/dashboard?mp_error=config`)
   }
 }

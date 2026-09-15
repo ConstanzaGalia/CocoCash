@@ -70,7 +70,7 @@ export default function SignUpPage() {
     <div className="flex min-h-svh w-full items-center justify-center bg-background p-6 md:p-10">
       <div className="w-full max-w-sm">
         <div className="flex flex-col gap-6">
-<Logo size={44} className="justify-center" textClassName="text-2xl" />
+<Logo size={80} className="justify-center" />
           <Card className="border-border/50 bg-card/50 backdrop-blur">
             <CardHeader>
               <CardTitle className="text-2xl">Crear cuenta</CardTitle>

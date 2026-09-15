@@ -1,13 +1,55 @@
+export type Currency = 'ARS' | 'USD'
+export type AccountKind = 'available' | 'savings'
+
 export interface Account {
   id: string
   user_id: string
   name: string
-  currency: 'ARS' | 'USD'
+  currency: Currency
   balance: number
+  kind: AccountKind
   source?: 'manual' | 'mercadopago'
   external_id?: string | null
   created_at: string
   updated_at: string
+}
+
+export interface IncomeSource {
+  id: string
+  user_id: string
+  name: string
+  currency: Currency
+  sort_order: number
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface MonthlyIncome {
+  id: string
+  user_id: string
+  income_source_id: string
+  month_key: string
+  amount: number
+  currency: Currency
+  account_id: string | null
+  transaction_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface Transfer {
+  id: string
+  user_id: string
+  from_account_id: string
+  to_account_id: string
+  amount: number
+  currency: Currency
+  to_amount: number
+  to_currency: Currency
+  date: string
+  notes: string | null
+  created_at: string
 }
 
 export interface Subscription {
@@ -15,7 +57,7 @@ export interface Subscription {
   user_id: string
   name: string
   amount: number
-  currency: 'ARS' | 'USD'
+  currency: Currency
   billing_date: number
   category: string
   is_paid: boolean
@@ -32,7 +74,7 @@ export interface CreditCard {
   current_balance: number
   closing_date: number
   due_date: number
-  currency: 'ARS' | 'USD'
+  currency: Currency
   created_at: string
   updated_at: string
 }
@@ -44,7 +86,7 @@ export interface Transaction {
   credit_card_id: string | null
   type: 'income' | 'expense'
   amount: number
-  currency: 'ARS' | 'USD'
+  currency: Currency
   category: string
   description: string | null
   date: string
@@ -70,7 +112,7 @@ export interface FixedExpense {
   user_id: string
   name: string
   amount: number
-  currency: 'ARS' | 'USD'
+  currency: Currency
   due_day: number
   category: string
   /** @deprecated Usar fixed_expense_payments. Se mantiene por compatibilidad. */
@@ -89,9 +131,11 @@ export interface FixedExpensePayment {
   fixed_expense_id: string
   month_key: string
   amount_paid: number
-  currency: 'ARS' | 'USD'
+  currency: Currency
   paid_at: string
   notes: string | null
+  account_id: string | null
+  transaction_id: string | null
   created_at: string
   updated_at: string
 }
@@ -104,48 +148,44 @@ export interface Profile {
   updated_at: string
 }
 
-export type View = 'dashboard' | 'accounts' | 'subscriptions' | 'credit-cards' | 'transactions' | 'fixed-expenses'
+export type View =
+  | 'dashboard'
+  | 'transactions'
+  | 'fixed-expenses'
+  | 'income'
+  | 'savings'
 
 export const CATEGORIES = {
   expense: [
-    'Alimentacion',
+    'Comida',
+    'Delivery',
+    'Salidas',
+    'Nutricionista',
+    'Regalos',
     'Transporte',
     'Entretenimiento',
-    'Servicios',
     'Salud',
-    'Educacion',
     'Ropa',
     'Hogar',
-    'Impuestos',
-    'Seguros',
-    'Otros'
+    'Otros',
   ],
-  income: [
-    'Salario',
-    'Freelance',
-    'Inversiones',
-    'Alquiler',
-    'Ventas',
-    'Otros'
-  ],
-  subscription: [
-    'Streaming',
-    'Software',
-    'Gaming',
-    'Musica',
-    'Noticias',
-    'Gimnasio',
-    'Cloud',
-    'Otros'
-  ],
+  income: ['Salario', 'Profesión', 'Extra', 'Freelance', 'Inversiones', 'Ventas', 'Otros'],
   fixedExpense: [
     'Alquiler',
+    'Expensas',
     'Servicios',
-    'Seguros',
+    'Tarjeta',
+    'Gimnasio',
+    'Deporte',
+    'Contador',
+    'Colegio profesional',
+    'Salud',
+    'Impuestos',
     'Internet',
     'Telefono',
-    'Impuestos',
     'Cuotas',
-    'Otros'
-  ]
+    'Otros',
+  ],
 }
+
+export const INCOME_SOURCE_SUGGESTIONS = ['Sueldo', 'Profesión', 'Extra']
