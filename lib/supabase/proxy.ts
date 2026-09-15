@@ -33,9 +33,13 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // Proteger rutas - redirigir a login si no hay usuario
-  const isAuthRoute = request.nextUrl.pathname.startsWith('/auth')
-  const isPublicRoute = request.nextUrl.pathname === '/'
+  const pathname = request.nextUrl.pathname
+  const isAuthRoute = pathname.startsWith('/auth')
+  const isPublicRoute =
+    pathname === '/' ||
+    pathname === '/manifest.webmanifest' ||
+    pathname.startsWith('/apple-icon') ||
+    pathname.startsWith('/icon')
   
   if (!user && !isAuthRoute && !isPublicRoute) {
     const url = request.nextUrl.clone()
