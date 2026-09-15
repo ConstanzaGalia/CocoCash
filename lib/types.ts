@@ -154,6 +154,7 @@ export type View =
   | 'fixed-expenses'
   | 'income'
   | 'savings'
+  | 'comparatives'
 
 export const CATEGORIES = {
   expense: [

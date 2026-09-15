@@ -7,6 +7,7 @@ import { TransactionsView } from '@/components/transactions-view'
 import { FixedExpensesView } from '@/components/fixed-expenses-view'
 import { IncomeSourcesView } from '@/components/income-sources-view'
 import { SavingsView } from '@/components/savings-view'
+import { ComparativesView } from '@/components/comparatives-view'
 import { QuickCashFab } from '@/components/quick-expense-fab'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -22,7 +23,8 @@ export default function DashboardPage() {
       view === 'income' ||
       view === 'transactions' ||
       view === 'fixed-expenses' ||
-      view === 'savings'
+      view === 'savings' ||
+      view === 'comparatives'
     ) {
       setActiveTab(view)
     }
@@ -51,6 +53,8 @@ export default function DashboardPage() {
         return <IncomeSourcesView />
       case 'savings':
         return <SavingsView />
+      case 'comparatives':
+        return <ComparativesView />
       default:
         return <Dashboard onNavigate={setActiveTab} />
     }

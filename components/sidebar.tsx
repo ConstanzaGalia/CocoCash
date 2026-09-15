@@ -14,6 +14,7 @@ import {
   LogOut,
   FileText,
   PiggyBank,
+  PieChart,
   TrendingUp,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -26,11 +27,12 @@ interface SidebarProps {
 }
 
 const navItems = [
-  { id: 'dashboard', label: 'Inicio', icon: LayoutDashboard },
-  { id: 'income', label: 'Ingresos', icon: TrendingUp },
-  { id: 'savings', label: 'Ahorros', icon: PiggyBank },
-  { id: 'fixed-expenses', label: 'Fijos', icon: FileText },
-  { id: 'transactions', label: 'Movimientos', icon: Receipt },
+  { id: 'dashboard', label: 'Inicio', icon: LayoutDashboard, mobileNav: true },
+  { id: 'income', label: 'Ingresos', icon: TrendingUp, mobileNav: true },
+  { id: 'savings', label: 'Ahorros', icon: PiggyBank, mobileNav: true },
+  { id: 'fixed-expenses', label: 'Fijos', icon: FileText, mobileNav: true },
+  { id: 'transactions', label: 'Movimientos', icon: Receipt, mobileNav: true },
+  { id: 'comparatives', label: 'Comparativas', icon: PieChart, mobileNav: false },
 ]
 
 export function Sidebar({ activeTab, onTabChange, userEmail }: SidebarProps) {
@@ -168,7 +170,7 @@ export function Sidebar({ activeTab, onTabChange, userEmail }: SidebarProps) {
       {/* Mobile Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-sidebar-border bg-sidebar pb-[env(safe-area-inset-bottom)] md:hidden">
         <div className="flex items-stretch">
-          {navItems.map((item) => {
+          {navItems.filter((item) => item.mobileNav).map((item) => {
             const Icon = item.icon
             const isActive = activeTab === item.id
             return (
