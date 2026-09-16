@@ -5,46 +5,106 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
 import { Button } from '@/components/ui/button'
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts'
-import type { Currency, Transaction } from '@/lib/types'
-import { formatCurrency } from '@/lib/utils'
+import type {
+  CardStatementPayment,
+  Currency,
+  FixedExpensePayment,
+  MonthlyIncome,
+  Transaction,
+  Transfer,
+} from '@/lib/types'
+import { computeFlowForMonth } from '@/lib/budget-flow'
+import { formatCurrency, shiftMonthKey } from '@/lib/utils'
 
 const MONTH_LABELS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 
 interface MonthlyBalanceProps {
+  monthKey: string
+  monthlyIncomes: MonthlyIncome[]
+  payments: FixedExpensePayment[]
+  cardPayments: CardStatementPayment[]
   transactions: Transaction[]
+  transfers: Transfer[]
+  savingsIds: Set<string>
 }
 
-function buildSeries(transactions: Transaction[], currency: Currency) {
-  const now = new Date()
-  const months: { label: string; year: number; month: number }[] = []
+function monthLabelFromKey(monthKey: string) {
+  const month = Number(monthKey.slice(5, 7)) - 1
+  return MONTH_LABELS[month] ?? monthKey
+}
+
+function buildSeries(
+  endMonthKey: string,
+  monthlyIncomes: MonthlyIncome[],
+  payments: FixedExpensePayment[],
+  cardPayments: CardStatementPayment[],
+  transactions: Transaction[],
+  transfers: Transfer[],
+  savingsIds: Set<string>,
+  currency: Currency,
+) {
+  const months: string[] = []
   for (let i = 5; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-    months.push({
-      label: MONTH_LABELS[d.getMonth()],
-      year: d.getFullYear(),
-      month: d.getMonth(),
-    })
+    months.push(shiftMonthKey(endMonthKey, -i))
   }
 
-  const filtered = transactions.filter((t) => t.currency === currency)
-  return months.map((m) => {
-    const monthTx = filtered.filter((t) => {
-      const date = new Date(t.date)
-      return date.getFullYear() === m.year && date.getMonth() === m.month
-    })
-    const ingresos = monthTx.filter((t) => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0)
-    const gastos = monthTx.filter((t) => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0)
-    return { mes: m.label, ingresos, gastos, balance: ingresos - gastos }
+  return months.map((key) => {
+    const flow = computeFlowForMonth(
+      key,
+      monthlyIncomes,
+      payments,
+      transactions,
+      transfers,
+      savingsIds,
+      cardPayments,
+    )[currency]
+    const ingresos = flow.income + flow.extra
+    const gastos = flow.paidFixed + flow.variable
+    return {
+      mes: monthLabelFromKey(key),
+      monthKey: key,
+      ingresos,
+      gastos,
+      fijos: flow.paidFixed,
+      variables: flow.variable,
+      balance: ingresos - gastos,
+    }
   })
 }
 
-export function MonthlyBalance({ transactions }: MonthlyBalanceProps) {
-  const hasUsd = useMemo(
-    () => transactions.some((tx) => tx.currency === 'USD'),
-    [transactions],
-  )
+export function MonthlyBalance({
+  monthKey,
+  monthlyIncomes,
+  payments,
+  cardPayments,
+  transactions,
+  transfers,
+  savingsIds,
+}: MonthlyBalanceProps) {
+  const hasUsd = useMemo(() => {
+    return (
+      monthlyIncomes.some((item) => item.currency === 'USD') ||
+      payments.some((item) => item.currency === 'USD') ||
+      cardPayments.some((item) => item.currency === 'USD') ||
+      transactions.some((tx) => tx.currency === 'USD')
+    )
+  }, [monthlyIncomes, payments, cardPayments, transactions])
+
   const [currency, setCurrency] = useState<Currency>('ARS')
-  const data = useMemo(() => buildSeries(transactions, currency), [transactions, currency])
+  const data = useMemo(
+    () =>
+      buildSeries(
+        monthKey,
+        monthlyIncomes,
+        payments,
+        cardPayments,
+        transactions,
+        transfers,
+        savingsIds,
+        currency,
+      ),
+    [monthKey, monthlyIncomes, payments, cardPayments, transactions, transfers, savingsIds, currency],
+  )
   const current = data[data.length - 1]
   const netBalance = current.balance
   const isPositive = netBalance >= 0
@@ -67,7 +127,9 @@ export function MonthlyBalance({ transactions }: MonthlyBalanceProps) {
           <CardTitle className={`text-sm font-medium ${isPositive ? 'text-primary' : 'text-red-400'}`}>
             Resultado del mes ({currency})
           </CardTitle>
-          <CardDescription>Cobros menos gastos de este mes. No es el disponible.</CardDescription>
+          <CardDescription>
+            Cobros menos fijos pagos (incl. tarjetas) y variables. No es el disponible.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className={`text-3xl font-bold ${isPositive ? 'text-primary' : 'text-red-400'}`}>
@@ -77,11 +139,23 @@ export function MonthlyBalance({ transactions }: MonthlyBalanceProps) {
           <div className="mt-4 space-y-1.5">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Ingresos</span>
-              <span className="font-medium text-primary">{formatCurrency(current.ingresos, currency)}</span>
+              <span className="font-medium text-primary">
+                {formatCurrency(current.ingresos, currency)}
+              </span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Gastos</span>
-              <span className="font-medium text-red-400">{formatCurrency(current.gastos, currency)}</span>
+              <span className="font-medium text-red-400">
+                {formatCurrency(current.gastos, currency)}
+              </span>
+            </div>
+            <div className="flex justify-between text-xs text-muted-foreground pt-1 border-t border-border/40">
+              <span>Fijos + tarjetas</span>
+              <span>{formatCurrency(current.fijos, currency)}</span>
+            </div>
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>Variables</span>
+              <span>{formatCurrency(current.variables, currency)}</span>
             </div>
           </div>
         </CardContent>
@@ -92,7 +166,10 @@ export function MonthlyBalance({ transactions }: MonthlyBalanceProps) {
           <div className="flex items-start justify-between gap-3">
             <div>
               <CardTitle className="text-lg">Evolucion mensual</CardTitle>
-              <CardDescription>Ingresos vs gastos de los ultimos 6 meses</CardDescription>
+              <CardDescription>
+                Ingresos vs gastos (fijos, tarjetas y variables) · últimos 6 meses hasta el mes
+                elegido
+              </CardDescription>
             </div>
             {hasUsd && (
               <div className="flex gap-1 shrink-0">

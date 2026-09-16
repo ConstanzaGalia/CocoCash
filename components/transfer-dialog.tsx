@@ -8,6 +8,7 @@ import {
   getWallet,
   useAccounts,
   useFixedExpensePayments,
+  useCardStatementPayments,
   useMonthlyIncomes,
   useTransactions,
   useTransfers,
@@ -53,10 +54,12 @@ export function TransferDialog({ open, onOpenChange, presetTo, presetFrom }: Tra
   const { transactions } = useTransactions()
   const { transfers } = useTransfers()
   const { payments } = useFixedExpensePayments()
+  const { cardPayments } = useCardStatementPayments()
   const { monthlyIncomes } = useMonthlyIncomes()
   const ledger = useMemo(
-    () => computeWalletLedger(accounts, transactions, transfers, payments, monthlyIncomes),
-    [accounts, transactions, transfers, payments, monthlyIncomes],
+    () =>
+      computeWalletLedger(accounts, transactions, transfers, payments, monthlyIncomes, cardPayments),
+    [accounts, transactions, transfers, payments, monthlyIncomes, cardPayments],
   )
   const [fromKey, setFromKey] = useState('')
   const [toKey, setToKey] = useState('')
@@ -264,12 +267,25 @@ export function useWallets() {
   const { transactions, isLoading: loadingTransactions } = useTransactions()
   const { transfers, isLoading: loadingTransfers } = useTransfers()
   const { payments, isLoading: loadingPayments } = useFixedExpensePayments()
+  const { cardPayments, isLoading: loadingCardPayments } = useCardStatementPayments()
   const { monthlyIncomes, isLoading: loadingIncomes } = useMonthlyIncomes()
   return useMemo(() => {
-    const ledger = computeWalletLedger(accounts, transactions, transfers, payments, monthlyIncomes)
+    const ledger = computeWalletLedger(
+      accounts,
+      transactions,
+      transfers,
+      payments,
+      monthlyIncomes,
+      cardPayments,
+    )
     return {
       isLoading:
-        loadingAccounts || loadingTransactions || loadingTransfers || loadingPayments || loadingIncomes,
+        loadingAccounts ||
+        loadingTransactions ||
+        loadingTransfers ||
+        loadingPayments ||
+        loadingCardPayments ||
+        loadingIncomes,
       availableArs: ledger.availableArs,
       availableUsd: ledger.availableUsd,
       savingsArs: ledger.savingsArs,
@@ -281,10 +297,12 @@ export function useWallets() {
     transfers,
     payments,
     monthlyIncomes,
+    cardPayments,
     loadingAccounts,
     loadingTransactions,
     loadingTransfers,
     loadingPayments,
+    loadingCardPayments,
     loadingIncomes,
   ])
 }

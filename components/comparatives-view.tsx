@@ -2,11 +2,12 @@
 
 import { useMemo, useState } from 'react'
 import {
+  useCardStatementPayments,
   useFixedExpensePayments,
   useFixedExpenses,
   useTransactions,
 } from '@/hooks/use-finance-data'
-import type { Currency, FixedExpense, FixedExpensePayment, Transaction } from '@/lib/types'
+import type { CardStatementPayment, Currency, FixedExpense, FixedExpensePayment, Transaction } from '@/lib/types'
 import {
   dateToMonthKey,
   formatCurrency,
@@ -85,8 +86,16 @@ function rangeLabel(endKey: string, range: RangeId) {
   return `${shortMonthLabel(months[0])} – ${shortMonthLabel(months[months.length - 1])}`
 }
 
-function paymentTxIds(payments: FixedExpensePayment[]) {
-  return new Set(payments.map((payment) => payment.transaction_id).filter(Boolean) as string[])
+function paymentTxIds(
+  payments: FixedExpensePayment[],
+  cardPayments: CardStatementPayment[] = [],
+) {
+  return new Set(
+    [
+      ...payments.map((payment) => payment.transaction_id),
+      ...cardPayments.map((payment) => payment.transaction_id),
+    ].filter(Boolean) as string[],
+  )
 }
 
 function variableExpenses(
@@ -94,8 +103,9 @@ function variableExpenses(
   payments: FixedExpensePayment[],
   monthKey: string,
   currency: Currency,
+  cardPayments: CardStatementPayment[] = [],
 ) {
-  const linked = paymentTxIds(payments)
+  const linked = paymentTxIds(payments, cardPayments)
   return transactions.filter(
     (tx) =>
       tx.type === 'expense' &&
@@ -105,10 +115,19 @@ function variableExpenses(
   )
 }
 
-function paidFixedTotal(payments: FixedExpensePayment[], monthKey: string, currency: Currency) {
-  return payments
+function paidFixedTotal(
+  payments: FixedExpensePayment[],
+  monthKey: string,
+  currency: Currency,
+  cardPayments: CardStatementPayment[] = [],
+) {
+  const fixed = payments
     .filter((payment) => payment.month_key === monthKey && payment.currency === currency)
     .reduce((sum, payment) => sum + Number(payment.amount_paid), 0)
+  const cards = cardPayments
+    .filter((payment) => payment.month_key === monthKey && payment.currency === currency)
+    .reduce((sum, payment) => sum + Number(payment.amount_paid), 0)
+  return fixed + cards
 }
 
 function groupByCategory(rows: { category: string; amount: number }[]) {
@@ -171,6 +190,7 @@ function amountForExpense(
 export function ComparativesView() {
   const { transactions, isLoading: loadingTx } = useTransactions()
   const { payments, isLoading: loadingPayments } = useFixedExpensePayments()
+  const { cardPayments, isLoading: loadingCardPayments } = useCardStatementPayments()
   const { fixedExpenses, isLoading: loadingFixed } = useFixedExpenses()
   const monthKey = toMonthKey()
   const [range, setRange] = useState<RangeId>('6')
@@ -181,8 +201,9 @@ export function ComparativesView() {
   const hasUsd = useMemo(
     () =>
       transactions.some((tx) => tx.currency === 'USD') ||
-      payments.some((payment) => payment.currency === 'USD'),
-    [transactions, payments],
+      payments.some((payment) => payment.currency === 'USD') ||
+      cardPayments.some((payment) => payment.currency === 'USD'),
+    [transactions, payments, cardPayments],
   )
 
   const months = useMemo(() => monthsForRange(monthKey, range), [monthKey, range])
@@ -190,11 +211,14 @@ export function ComparativesView() {
   const series = useMemo(
     () =>
       months.map((key) => {
-        const fijos = paidFixedTotal(payments, key, currency)
-        const variables = variableExpenses(transactions, payments, key, currency).reduce(
-          (sum, tx) => sum + Number(tx.amount),
-          0,
-        )
+        const fijos = paidFixedTotal(payments, key, currency, cardPayments)
+        const variables = variableExpenses(
+          transactions,
+          payments,
+          key,
+          currency,
+          cardPayments,
+        ).reduce((sum, tx) => sum + Number(tx.amount), 0)
         return {
           mes: shortMonthLabel(key),
           monthKey: key,
@@ -203,7 +227,7 @@ export function ComparativesView() {
           total: fijos + variables,
         }
       }),
-    [months, payments, transactions, currency],
+    [months, payments, cardPayments, transactions, currency],
   )
 
   const breakdownExpenses = useMemo(
@@ -289,28 +313,45 @@ export function ComparativesView() {
       .sort((a, b) => b.total - a.total)
   }, [breakdownExpenses, months, payments, currency, expenseId])
 
-  const monthFijos = paidFixedTotal(payments, monthKey, currency)
-  const monthVariables = variableExpenses(transactions, payments, monthKey, currency).reduce(
-    (sum, tx) => sum + Number(tx.amount),
-    0,
-  )
+  const monthFijos = paidFixedTotal(payments, monthKey, currency, cardPayments)
+  const monthVariables = variableExpenses(
+    transactions,
+    payments,
+    monthKey,
+    currency,
+    cardPayments,
+  ).reduce((sum, tx) => sum + Number(tx.amount), 0)
 
   const pieRows = useMemo(() => {
     const expenseById = new Map(fixedExpenses.map((expense) => [expense.id, expense]))
-    const fixedRows = payments
-      .filter((payment) => payment.month_key === monthKey && payment.currency === currency)
-      .map((payment) => ({
-        category: expenseById.get(payment.fixed_expense_id)?.category || 'Fijos',
-        amount: Number(payment.amount_paid),
-      }))
-    const variableRows = variableExpenses(transactions, payments, monthKey, currency).map((tx) => ({
+    const fixedRows = [
+      ...payments
+        .filter((payment) => payment.month_key === monthKey && payment.currency === currency)
+        .map((payment) => ({
+          category: expenseById.get(payment.fixed_expense_id)?.category || 'Fijos',
+          amount: Number(payment.amount_paid),
+        })),
+      ...cardPayments
+        .filter((payment) => payment.month_key === monthKey && payment.currency === currency)
+        .map((payment) => ({
+          category: 'Tarjeta',
+          amount: Number(payment.amount_paid),
+        })),
+    ]
+    const variableRows = variableExpenses(
+      transactions,
+      payments,
+      monthKey,
+      currency,
+      cardPayments,
+    ).map((tx) => ({
       category: tx.category || 'Otros',
       amount: Number(tx.amount),
     }))
     const rows =
       pieScope === 'fixed' ? fixedRows : pieScope === 'variable' ? variableRows : [...fixedRows, ...variableRows]
     return groupByCategory(rows)
-  }, [fixedExpenses, payments, transactions, monthKey, currency, pieScope])
+  }, [fixedExpenses, payments, cardPayments, transactions, monthKey, currency, pieScope])
 
   const pieTotal = pieRows.reduce((sum, item) => sum + item.value, 0)
   const pieConfig = Object.fromEntries(
@@ -325,7 +366,7 @@ export function ComparativesView() {
     variables: { label: 'Variables', color: '#f87171' },
   }
 
-  if (loadingTx || loadingPayments || loadingFixed) {
+  if (loadingTx || loadingPayments || loadingCardPayments || loadingFixed) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-8 w-48" />

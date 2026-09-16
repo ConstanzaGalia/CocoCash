@@ -79,6 +79,51 @@ export interface CreditCard {
   updated_at: string
 }
 
+/** Tarjeta mínima para presupuesto (cuotas + débitos). */
+export interface Card {
+  id: string
+  user_id: string
+  name: string
+  due_day: number
+  created_at: string
+  updated_at: string
+}
+
+export type CardItemKind = 'installment' | 'debit'
+
+export interface CardItem {
+  id: string
+  user_id: string
+  card_id: string
+  kind: CardItemKind
+  name: string
+  /** Total de la compra (cuotas) o monto mensual (débito). */
+  amount: number
+  currency: Currency
+  start_month_key: string
+  installments: number | null
+  /** Último mes que cobra inclusive; null = sin fin (solo débitos). */
+  end_month_key: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface CardStatementPayment {
+  id: string
+  user_id: string
+  card_id: string
+  month_key: string
+  currency: Currency
+  amount_paid: number
+  paid_at: string
+  notes: string | null
+  account_id: string | null
+  transaction_id: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface Transaction {
   id: string
   user_id: string
@@ -120,6 +165,8 @@ export interface FixedExpense {
   /** @deprecated Usar fixed_expense_payments. Se mantiene por compatibilidad. */
   last_paid_date: string | null
   notes: string | null
+  /** false = archivado: no sale en el checklist, conserva pagos históricos. */
+  is_active: boolean
   created_at: string
   updated_at: string
 }

@@ -16,6 +16,7 @@ import {
   PiggyBank,
   PieChart,
   TrendingUp,
+  CreditCard,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Logo } from '@/components/logo'
@@ -31,6 +32,7 @@ const navItems = [
   { id: 'dashboard', label: 'Inicio', icon: LayoutDashboard, mobileNav: true },
   { id: 'income', label: 'Ingresos', icon: TrendingUp, mobileNav: true },
   { id: 'savings', label: 'Ahorros', icon: PiggyBank, mobileNav: true },
+  { id: 'cards', label: 'Tarjetas', icon: CreditCard, mobileNav: false },
   { id: 'fixed-expenses', label: 'Fijos', icon: FileText, mobileNav: true },
   { id: 'transactions', label: 'Movimientos', icon: Receipt, mobileNav: true },
   { id: 'comparatives', label: 'Comparativas', icon: PieChart, mobileNav: false },

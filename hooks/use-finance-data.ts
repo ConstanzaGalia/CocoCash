@@ -4,6 +4,9 @@ import { createClient } from '@/lib/supabase/client'
 import type {
   Account,
   AccountKind,
+  Card,
+  CardItem,
+  CardStatementPayment,
   Currency,
   CreditCard,
   FixedExpense,
@@ -63,8 +66,16 @@ export function computeWalletLedger(
   transfers: Transfer[],
   payments: FixedExpensePayment[] = [],
   monthlyIncomes: MonthlyIncome[] = [],
+  cardPayments: CardStatementPayment[] = [],
 ) {
-  const totals = computeWalletTotals(accounts, transactions, transfers, payments, monthlyIncomes)
+  const totals = computeWalletTotals(
+    accounts,
+    transactions,
+    transfers,
+    payments,
+    monthlyIncomes,
+    cardPayments,
+  )
   return {
     ...totals,
     slot: (kind: AccountKind, currency: Currency) => {
@@ -104,7 +115,10 @@ async function fetchTransactions(): Promise<Transaction[]> {
 async function fetchFixedExpenses(): Promise<FixedExpense[]> {
   const { data, error } = await supabase.from('fixed_expenses').select('*').order('due_day', { ascending: true })
   if (error) throw error
-  return data || []
+  return (data || []).map((expense) => ({
+    ...expense,
+    is_active: expense.is_active !== false,
+  }))
 }
 
 async function fetchFixedExpensePayments(): Promise<FixedExpensePayment[]> {
@@ -144,6 +158,30 @@ async function fetchTransfers(): Promise<Transfer[]> {
     to_amount: Number(transfer.to_amount ?? transfer.amount),
     to_currency: (transfer.to_currency as Currency) || transfer.currency,
   }))
+}
+
+async function fetchCards(): Promise<Card[]> {
+  const { data, error } = await supabase.from('cards').select('*').order('created_at', { ascending: true })
+  if (error) throw error
+  return data || []
+}
+
+async function fetchCardItems(): Promise<CardItem[]> {
+  const { data, error } = await supabase
+    .from('card_items')
+    .select('*')
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data || []
+}
+
+async function fetchCardStatementPayments(): Promise<CardStatementPayment[]> {
+  const { data, error } = await supabase
+    .from('card_statement_payments')
+    .select('*')
+    .order('month_key', { ascending: false })
+  if (error) throw error
+  return data || []
 }
 
 export function useAccounts() {
@@ -195,6 +233,27 @@ export function useTransfers() {
     shouldRetryOnError: false,
   })
   return { transfers: data || [], error, isLoading }
+}
+
+export function useCards() {
+  const { data, error, isLoading } = useSWR('cards', fetchCards, {
+    shouldRetryOnError: false,
+  })
+  return { cards: data || [], error, isLoading }
+}
+
+export function useCardItems() {
+  const { data, error, isLoading } = useSWR('card_items', fetchCardItems, {
+    shouldRetryOnError: false,
+  })
+  return { cardItems: data || [], error, isLoading }
+}
+
+export function useCardStatementPayments() {
+  const { data, error, isLoading } = useSWR('card_statement_payments', fetchCardStatementPayments, {
+    shouldRetryOnError: false,
+  })
+  return { cardPayments: data || [], error, isLoading }
 }
 
 export async function createAccount(
@@ -363,8 +422,17 @@ export async function createFixedExpense(
   expense: Omit<FixedExpense, 'id' | 'user_id' | 'created_at' | 'updated_at'>,
 ) {
   const userId = await requireUserId()
-  const { data, error } = await supabase.from('fixed_expenses').insert({ ...expense, user_id: userId }).select().single()
-  if (error) throw error
+  const { data, error } = await supabase
+    .from('fixed_expenses')
+    .insert({ ...expense, is_active: expense.is_active ?? true, user_id: userId })
+    .select()
+    .single()
+  if (error) {
+    if (error.message?.includes('is_active') || error.code === 'PGRST204') {
+      throw new Error('Ejecutá en Supabase scripts/008_archive_fixed_expenses.sql')
+    }
+    throw error
+  }
   mutate('fixed_expenses')
   return data
 }
@@ -376,9 +444,18 @@ export async function updateFixedExpense(id: string, expense: Partial<FixedExpen
     .eq('id', id)
     .select()
     .single()
-  if (error) throw error
+  if (error) {
+    if (error.message?.includes('is_active') || error.code === 'PGRST204') {
+      throw new Error('Ejecutá en Supabase scripts/008_archive_fixed_expenses.sql')
+    }
+    throw error
+  }
   mutate('fixed_expenses')
   return data
+}
+
+export async function setFixedExpenseActive(id: string, isActive: boolean) {
+  return updateFixedExpense(id, { is_active: isActive })
 }
 
 export async function deleteFixedExpense(id: string) {
@@ -865,4 +942,224 @@ export async function deleteTransfer(id: string) {
     )
   }
   mutate('transfers')
+}
+
+export async function createCard(input: { name: string; due_day: number }) {
+  const userId = await requireUserId()
+  const { data, error } = await supabase
+    .from('cards')
+    .insert({
+      user_id: userId,
+      name: input.name.trim(),
+      due_day: input.due_day,
+    })
+    .select()
+    .single()
+  if (error) {
+    if (error.code === '42P01' || error.message?.includes('does not exist')) {
+      throw new Error('Ejecutá en Supabase scripts/007_cards.sql')
+    }
+    throw error
+  }
+  mutate('cards')
+  return data as Card
+}
+
+export async function updateCard(id: string, input: Partial<Pick<Card, 'name' | 'due_day'>>) {
+  const { data, error } = await supabase
+    .from('cards')
+    .update({ ...input, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  mutate('cards')
+  return data as Card
+}
+
+export async function deleteCard(id: string) {
+  const { error } = await supabase.from('cards').delete().eq('id', id)
+  if (error) throw error
+  mutate('cards')
+  mutate('card_items')
+  mutate('card_statement_payments')
+}
+
+export async function createCardItem(input: {
+  card_id: string
+  kind: CardItem['kind']
+  name: string
+  amount: number
+  currency: Currency
+  start_month_key: string
+  installments?: number | null
+  end_month_key?: string | null
+  notes?: string | null
+}) {
+  const userId = await requireUserId()
+  const amount = Number(input.amount)
+  if (amount <= 0) throw new Error('El monto tiene que ser mayor a 0')
+
+  const payload =
+    input.kind === 'installment'
+      ? {
+          user_id: userId,
+          card_id: input.card_id,
+          kind: 'installment' as const,
+          name: input.name.trim(),
+          amount,
+          currency: input.currency,
+          start_month_key: input.start_month_key,
+          installments: input.installments ?? 1,
+          end_month_key: null,
+          notes: input.notes ?? null,
+        }
+      : {
+          user_id: userId,
+          card_id: input.card_id,
+          kind: 'debit' as const,
+          name: input.name.trim(),
+          amount,
+          currency: input.currency,
+          start_month_key: input.start_month_key,
+          installments: null,
+          end_month_key: input.end_month_key ?? null,
+          notes: input.notes ?? null,
+        }
+
+  const { data, error } = await supabase.from('card_items').insert(payload as Record<string, unknown>).select().single()
+  if (error) {
+    if (error.code === '42P01' || error.message?.includes('does not exist')) {
+      throw new Error('Ejecutá en Supabase scripts/007_cards.sql')
+    }
+    throw error
+  }
+  mutate('card_items')
+  return data as CardItem
+}
+
+export async function updateCardItem(
+  id: string,
+  input: Partial<
+    Pick<
+      CardItem,
+      'name' | 'amount' | 'currency' | 'start_month_key' | 'installments' | 'end_month_key' | 'notes'
+    >
+  >,
+) {
+  const { data, error } = await supabase
+    .from('card_items')
+    .update({ ...input, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  mutate('card_items')
+  return data as CardItem
+}
+
+export async function deleteCardItem(id: string) {
+  const { error } = await supabase.from('card_items').delete().eq('id', id)
+  if (error) throw error
+  mutate('card_items')
+}
+
+export async function recordCardStatementPayment(input: {
+  card_id: string
+  card_name: string
+  month_key: string
+  currency: Currency
+  amount_paid: number
+  account_id?: string | null
+  notes?: string | null
+  paid_at?: string
+}) {
+  const userId = await requireUserId()
+  const paidAt = input.paid_at ?? new Date().toISOString().split('T')[0]
+
+  const { data: existing } = await supabase
+    .from('card_statement_payments')
+    .select('*')
+    .eq('card_id', input.card_id)
+    .eq('month_key', input.month_key)
+    .eq('currency', input.currency)
+    .maybeSingle()
+
+  let transactionId = existing?.transaction_id as string | null | undefined
+  const description = `${input.card_name} · ${input.currency}`
+
+  if (transactionId) {
+    await updateTransaction(transactionId, {
+      amount: input.amount_paid,
+      currency: input.currency,
+      account_id: input.account_id ?? existing?.account_id ?? null,
+      date: paidAt,
+      description,
+      category: 'Tarjeta',
+    })
+  } else {
+    const tx = await createTransaction({
+      type: 'expense',
+      amount: input.amount_paid,
+      currency: input.currency,
+      category: 'Tarjeta',
+      description,
+      date: paidAt,
+      is_paid: true,
+      account_id: input.account_id ?? null,
+      credit_card_id: null,
+      source: 'manual',
+    })
+    transactionId = tx.id
+  }
+
+  const { data, error } = await supabase
+    .from('card_statement_payments')
+    .upsert(
+      {
+        user_id: userId,
+        card_id: input.card_id,
+        month_key: input.month_key,
+        currency: input.currency,
+        amount_paid: input.amount_paid,
+        paid_at: paidAt,
+        notes: input.notes ?? null,
+        account_id: input.account_id ?? null,
+        transaction_id: transactionId,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'card_id,month_key,currency' },
+    )
+    .select()
+    .single()
+
+  if (error) throw error
+  mutate('card_statement_payments')
+  return data as CardStatementPayment
+}
+
+export async function deleteCardStatementPayment(
+  cardId: string,
+  monthKey: string,
+  currency: Currency,
+) {
+  const { data: existing, error: fetchError } = await supabase
+    .from('card_statement_payments')
+    .select('*')
+    .eq('card_id', cardId)
+    .eq('month_key', monthKey)
+    .eq('currency', currency)
+    .maybeSingle()
+  if (fetchError) throw fetchError
+
+  if (existing?.transaction_id) {
+    await deleteTransaction(existing.transaction_id)
+  }
+
+  if (existing?.id) {
+    const { error } = await supabase.from('card_statement_payments').delete().eq('id', existing.id)
+    if (error) throw error
+  }
+
+  mutate('card_statement_payments')
 }

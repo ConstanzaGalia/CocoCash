@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import {
   useAccounts,
+  useCardStatementPayments,
   useFixedExpensePayments,
   useFixedExpenses,
   useIncomeSources,
@@ -86,6 +87,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (tab: string) => void }
   const { transactions, isLoading: loadingTransactions } = useTransactions()
   const { fixedExpenses, isLoading: loadingFixed } = useFixedExpenses()
   const { payments, isLoading: loadingPayments } = useFixedExpensePayments()
+  const { cardPayments, isLoading: loadingCardPayments } = useCardStatementPayments()
   const { incomeSources, error: incomeError, isLoading: loadingSources } = useIncomeSources()
   const { monthlyIncomes, isLoading: loadingIncomes } = useMonthlyIncomes()
   const { transfers, isLoading: loadingTransfers } = useTransfers()
@@ -106,6 +108,7 @@ export function Dashboard({ onNavigate }: { onNavigate?: (tab: string) => void }
     loadingTransactions ||
     loadingFixed ||
     loadingPayments ||
+    loadingCardPayments ||
     loadingSources ||
     loadingIncomes ||
     loadingTransfers
@@ -131,8 +134,16 @@ export function Dashboard({ onNavigate }: { onNavigate?: (tab: string) => void }
   )
 
   const linkedExpenseTxIds = useMemo(
-    () => new Set(monthPayments.map((payment) => payment.transaction_id).filter(Boolean) as string[]),
-    [monthPayments],
+    () =>
+      new Set(
+        [
+          ...monthPayments.map((payment) => payment.transaction_id),
+          ...cardPayments
+            .filter((payment) => payment.month_key === monthKey)
+            .map((payment) => payment.transaction_id),
+        ].filter(Boolean) as string[],
+      ),
+    [monthPayments, cardPayments, monthKey],
   )
 
   const monthTransactions = useMemo(
@@ -147,12 +158,21 @@ export function Dashboard({ onNavigate }: { onNavigate?: (tab: string) => void }
 
   const flow = useMemo(
     () =>
-      computeFlowForMonth(monthKey, monthlyIncomes, payments, transactions, transfers, savingsIds),
-    [monthKey, monthlyIncomes, payments, transactions, transfers, savingsIds],
+      computeFlowForMonth(
+        monthKey,
+        monthlyIncomes,
+        payments,
+        transactions,
+        transfers,
+        savingsIds,
+        cardPayments,
+      ),
+    [monthKey, monthlyIncomes, payments, transactions, transfers, savingsIds, cardPayments],
   )
 
   const paidExpenseIds = new Set(monthPayments.map((payment) => payment.fixed_expense_id))
-  const pendingFixed = fixedExpenses.filter((expense) => !paidExpenseIds.has(expense.id))
+  const activeFixed = fixedExpenses.filter((expense) => expense.is_active !== false)
+  const pendingFixed = activeFixed.filter((expense) => !paidExpenseIds.has(expense.id))
   const pendingFixedArs = pendingFixed
     .filter((expense) => expense.currency === 'ARS')
     .reduce((sum, expense) => sum + Number(expense.amount), 0)
@@ -160,9 +180,9 @@ export function Dashboard({ onNavigate }: { onNavigate?: (tab: string) => void }
     .filter((expense) => expense.currency === 'USD')
     .reduce((sum, expense) => sum + Number(expense.amount), 0)
   const fixedProgress =
-    fixedExpenses.length === 0
+    activeFixed.length === 0
       ? 0
-      : Math.round(((fixedExpenses.length - pendingFixed.length) / fixedExpenses.length) * 100)
+      : Math.round(((activeFixed.length - pendingFixed.length) / activeFixed.length) * 100)
 
   const recentVariables = monthTransactions
     .filter((tx) => tx.type === 'expense' && !linkedExpenseTxIds.has(tx.id))
@@ -384,7 +404,17 @@ export function Dashboard({ onNavigate }: { onNavigate?: (tab: string) => void }
         </Card>
       </div>
 
-      {isDesktop ? <MonthlyBalance transactions={transactions} /> : null}
+      {isDesktop ? (
+        <MonthlyBalance
+          monthKey={monthKey}
+          monthlyIncomes={monthlyIncomes}
+          payments={payments}
+          cardPayments={cardPayments}
+          transactions={transactions}
+          transfers={transfers}
+          savingsIds={savingsIds}
+        />
+      ) : null}
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card className="border-border/50 bg-card/50">

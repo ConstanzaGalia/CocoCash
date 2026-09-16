@@ -10,11 +10,18 @@ import {
   recordFixedExpensePayment,
   updateFixedExpensePayment,
   deleteFixedExpensePaymentForMonth,
+  setFixedExpenseActive,
   getWallet,
+  useCards,
+  useCardItems,
+  useCardStatementPayments,
+  recordCardStatementPayment,
+  deleteCardStatementPayment,
 } from '@/hooks/use-finance-data'
-import type { FixedExpense, FixedExpensePayment } from '@/lib/types'
+import type { Card as BudgetCard, CardStatementPayment, Currency, FixedExpense, FixedExpensePayment } from '@/lib/types'
 import { CATEGORIES } from '@/lib/types'
 import { CategoryPicker, mergeCategories } from '@/components/category-picker'
+import { cardItemsForMonth, cardMonthTotal, currenciesWithBalance } from '@/lib/card-billing'
 import {
   cn,
   toMonthKey,
@@ -63,6 +70,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   Plus,
   Pencil,
@@ -74,6 +82,10 @@ import {
   ChevronLeft,
   ChevronRight,
   Receipt,
+  CreditCard,
+  CircleHelp,
+  Archive,
+  ArchiveRestore,
 } from 'lucide-react'
 
 function formatCurrency(amount: number, currency: string) {
@@ -106,12 +118,20 @@ const initialFormData: ExpenseFormData = {
 export function FixedExpensesView() {
   const { fixedExpenses, isLoading: loadingExpenses } = useFixedExpenses()
   const { payments, isLoading: loadingPayments } = useFixedExpensePayments()
+  const { cards, isLoading: loadingCards } = useCards()
+  const { cardItems, isLoading: loadingCardItems } = useCardItems()
+  const { cardPayments, isLoading: loadingCardPayments } = useCardStatementPayments()
   const [monthKey, setMonthKey] = useState(() => toMonthKey())
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
   const [isPayDialogOpen, setIsPayDialogOpen] = useState(false)
   const [editingExpense, setEditingExpense] = useState<FixedExpense | null>(null)
   const [payingExpense, setPayingExpense] = useState<FixedExpense | null>(null)
+  const [payingCard, setPayingCard] = useState<{
+    card: BudgetCard
+    currency: Currency
+    amount: number
+  } | null>(null)
   const [payAmount, setPayAmount] = useState('')
   const [payNotes, setPayNotes] = useState('')
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -120,7 +140,8 @@ export function FixedExpensesView() {
   const [isPaying, setIsPaying] = useState(false)
   const [savingPaymentId, setSavingPaymentId] = useState<string | null>(null)
 
-  const isLoading = loadingExpenses || loadingPayments
+  const isLoading =
+    loadingExpenses || loadingPayments || loadingCards || loadingCardItems || loadingCardPayments
   const currentMonthKey = toMonthKey()
   const isCurrentMonth = monthKey === currentMonthKey
 
@@ -134,8 +155,29 @@ export function FixedExpensesView() {
     return map
   }, [payments, monthKey])
 
+  const cardPaymentKey = (cardId: string, currency: Currency) => `${cardId}:${currency}`
+
+  const paymentsByCard = useMemo(() => {
+    const map = new Map<string, CardStatementPayment>()
+    for (const payment of cardPayments) {
+      if (payment.month_key === monthKey) {
+        map.set(cardPaymentKey(payment.card_id, payment.currency), payment)
+      }
+    }
+    return map
+  }, [cardPayments, monthKey])
+
+  const activeFixedExpenses = useMemo(
+    () => fixedExpenses.filter((expense) => expense.is_active !== false),
+    [fixedExpenses],
+  )
+  const archivedFixedExpenses = useMemo(
+    () => fixedExpenses.filter((expense) => expense.is_active === false),
+    [fixedExpenses],
+  )
+
   const checklist = useMemo(() => {
-    return fixedExpenses.map((expense) => {
+    return activeFixedExpenses.map((expense) => {
       const payment = paymentsByExpenseId.get(expense.id) ?? null
       const dueDate = dueDateForMonth(expense.due_day, monthKey)
       const today = new Date()
@@ -145,21 +187,81 @@ export function FixedExpensesView() {
       const isDueSoon = !payment && !isOverdue && daysUntilDue >= 0 && daysUntilDue <= 3 && isCurrentMonth
       return { expense, payment, isOverdue, isDueSoon, dueDate }
     })
-  }, [fixedExpenses, paymentsByExpenseId, monthKey, currentMonthKey, isCurrentMonth])
+  }, [activeFixedExpenses, paymentsByExpenseId, monthKey, currentMonthKey, isCurrentMonth])
+
+  const cardChecklist = useMemo(() => {
+    const rows: {
+      card: BudgetCard
+      currency: Currency
+      amount: number
+      payment: CardStatementPayment | null
+      lines: ReturnType<typeof cardItemsForMonth>
+      isOverdue: boolean
+      isDueSoon: boolean
+    }[] = []
+
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    for (const card of cards) {
+      const items = cardItems.filter((item) => item.card_id === card.id)
+      for (const currency of currenciesWithBalance(items, monthKey)) {
+        const amount = cardMonthTotal(items, monthKey, currency)
+        if (amount <= 0) continue
+        const payment = paymentsByCard.get(cardPaymentKey(card.id, currency)) ?? null
+        const dueDate = dueDateForMonth(card.due_day, monthKey)
+        const isOverdue = !payment && dueDate < today && monthKey <= currentMonthKey
+        const daysUntilDue = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+        const isDueSoon =
+          !payment && !isOverdue && daysUntilDue >= 0 && daysUntilDue <= 3 && isCurrentMonth
+        rows.push({
+          card,
+          currency,
+          amount,
+          payment,
+          lines: cardItemsForMonth(items, monthKey, currency),
+          isOverdue,
+          isDueSoon,
+        })
+      }
+    }
+    return rows
+  }, [cards, cardItems, monthKey, paymentsByCard, currentMonthKey, isCurrentMonth])
 
   const paidItems = checklist.filter((item) => item.payment)
   const pendingItems = checklist.filter((item) => !item.payment)
-  const totalEstimated = fixedExpenses.reduce((sum, e) => sum + Number(e.amount), 0)
-  const totalPaid = paidItems.reduce((sum, item) => sum + Number(item.payment!.amount_paid), 0)
-  const totalPending = pendingItems.reduce((sum, item) => sum + Number(item.expense.amount), 0)
+  const paidCards = cardChecklist.filter((item) => item.payment)
+  const pendingCards = cardChecklist.filter((item) => !item.payment)
+
+  const totalChecklistCount = activeFixedExpenses.length + cardChecklist.length
+  const totalPaidCount = paidItems.length + paidCards.length
+  const totalEstimated =
+    activeFixedExpenses.reduce((sum, e) => sum + Number(e.amount), 0) +
+    cardChecklist.reduce((sum, row) => sum + (row.currency === 'ARS' ? row.amount : 0), 0)
+  const totalPaid =
+    paidItems.reduce((sum, item) => sum + Number(item.payment!.amount_paid), 0) +
+    paidCards
+      .filter((row) => row.currency === 'ARS')
+      .reduce((sum, row) => sum + Number(row.payment!.amount_paid), 0)
+  const totalPending =
+    pendingItems.reduce((sum, item) => sum + Number(item.expense.amount), 0) +
+    pendingCards
+      .filter((row) => row.currency === 'ARS')
+      .reduce((sum, row) => sum + row.amount, 0)
   const progressPercent =
-    fixedExpenses.length === 0 ? 0 : Math.round((paidItems.length / fixedExpenses.length) * 100)
+    totalChecklistCount === 0 ? 0 : Math.round((totalPaidCount / totalChecklistCount) * 100)
 
   const monthlyMovements = useMemo(() => {
-    return paidItems
-      .map(({ expense, payment }) => ({ expense, payment: payment! }))
+    return payments
+      .filter((payment) => payment.month_key === monthKey)
+      .map((payment) => {
+        const expense = fixedExpenses.find((item) => item.id === payment.fixed_expense_id)
+        if (!expense) return null
+        return { expense, payment }
+      })
+      .filter((row): row is { expense: FixedExpense; payment: FixedExpensePayment } => row !== null)
       .sort((a, b) => b.payment.paid_at.localeCompare(a.payment.paid_at))
-  }, [paidItems])
+  }, [payments, monthKey, fixedExpenses])
 
   const handleOpenCreate = () => {
     setEditingExpense(null)
@@ -197,6 +299,7 @@ export function FixedExpensesView() {
         notes: formData.notes || null,
         is_paid_this_month: false,
         last_paid_date: null as string | null,
+        is_active: true,
       }
 
       if (editingExpense) {
@@ -227,6 +330,24 @@ export function FixedExpensesView() {
     }
   }
 
+  const handleArchive = async (id: string) => {
+    try {
+      await setFixedExpenseActive(id, false)
+    } catch (error) {
+      console.error('Error archiving fixed expense:', error)
+      alert(error instanceof Error ? error.message : 'No se pudo archivar')
+    }
+  }
+
+  const handleRestore = async (id: string) => {
+    try {
+      await setFixedExpenseActive(id, true)
+    } catch (error) {
+      console.error('Error restoring fixed expense:', error)
+      alert(error instanceof Error ? error.message : 'No se pudo restaurar')
+    }
+  }
+
   const categoryOptions = mergeCategories(
     CATEGORIES.fixedExpense,
     fixedExpenses.map((expense) => expense.category),
@@ -234,6 +355,7 @@ export function FixedExpensesView() {
 
   const handleTogglePaid = async (expense: FixedExpense, checked: boolean) => {
     if (checked) {
+      setPayingCard(null)
       setPayingExpense(expense)
       setPayAmount(Number(expense.amount).toString())
       setPayNotes('')
@@ -248,23 +370,56 @@ export function FixedExpensesView() {
     }
   }
 
+  const handleToggleCardPaid = async (
+    row: { card: BudgetCard; currency: Currency; amount: number },
+    checked: boolean,
+  ) => {
+    if (checked) {
+      setPayingExpense(null)
+      setPayingCard(row)
+      setPayAmount(row.amount.toFixed(2))
+      setPayNotes('')
+      setIsPayDialogOpen(true)
+      return
+    }
+
+    try {
+      await deleteCardStatementPayment(row.card.id, monthKey, row.currency)
+    } catch (error) {
+      console.error('Error removing card payment:', error)
+    }
+  }
+
   const handleConfirmPayment = async () => {
-    if (!payingExpense) return
     setIsPaying(true)
     try {
-      const wallet = await getWallet('available', payingExpense.currency)
-      await recordFixedExpensePayment({
-        fixed_expense_id: payingExpense.id,
-        month_key: monthKey,
-        amount_paid: parseFloat(payAmount) || 0,
-        currency: payingExpense.currency,
-        notes: payNotes || null,
-        account_id: wallet.id,
-        expense_name: payingExpense.name,
-        category: payingExpense.category,
-      })
+      if (payingCard) {
+        const wallet = await getWallet('available', payingCard.currency)
+        await recordCardStatementPayment({
+          card_id: payingCard.card.id,
+          card_name: payingCard.card.name,
+          month_key: monthKey,
+          currency: payingCard.currency,
+          amount_paid: parseFloat(payAmount) || 0,
+          notes: payNotes || null,
+          account_id: wallet.id,
+        })
+        setPayingCard(null)
+      } else if (payingExpense) {
+        const wallet = await getWallet('available', payingExpense.currency)
+        await recordFixedExpensePayment({
+          fixed_expense_id: payingExpense.id,
+          month_key: monthKey,
+          amount_paid: parseFloat(payAmount) || 0,
+          currency: payingExpense.currency,
+          notes: payNotes || null,
+          account_id: wallet.id,
+          expense_name: payingExpense.name,
+          category: payingExpense.category,
+        })
+        setPayingExpense(null)
+      }
       setIsPayDialogOpen(false)
-      setPayingExpense(null)
     } catch (error) {
       console.error('Error recording payment:', error)
     } finally {
@@ -363,8 +518,8 @@ export function FixedExpensesView() {
             <div className="flex items-end justify-between gap-4">
               <div>
                 <p className="text-3xl font-bold">
-                  {paidItems.length}
-                  <span className="text-lg text-muted-foreground"> / {fixedExpenses.length}</span>
+                  {totalPaidCount}
+                  <span className="text-lg text-muted-foreground"> / {totalChecklistCount}</span>
                 </p>
                 <p className="text-xs text-muted-foreground">pagados este mes</p>
               </div>
@@ -389,7 +544,9 @@ export function FixedExpensesView() {
             <div className="text-2xl font-bold text-orange-400">
               {formatCurrency(totalPending, 'ARS')}
             </div>
-            <p className="text-xs text-muted-foreground">{pendingItems.length} por pagar</p>
+            <p className="text-xs text-muted-foreground">
+              {pendingItems.length + pendingCards.length} por pagar
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -403,11 +560,12 @@ export function FixedExpensesView() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {fixedExpenses.length === 0 ? (
+          {activeFixedExpenses.length === 0 && cardChecklist.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              No hay gastos fijos. Creá uno (alquiler, tarjeta, gimnasio, etc.) para armar el checklist del mes.
+              No hay gastos fijos ni resúmenes de tarjeta este mes. Creá un fijo o cargá cuotas en
+              Tarjetas.
             </div>
-          ) : pendingItems.length === 0 ? (
+          ) : pendingItems.length === 0 && pendingCards.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <CheckCircle2 className="h-8 w-8 mx-auto mb-2 text-primary" />
               <p className="font-medium text-foreground">¡Todo pagado este mes!</p>
@@ -415,6 +573,81 @@ export function FixedExpensesView() {
             </div>
           ) : (
             <div className="space-y-2">
+              {pendingCards.map((row) => (
+                <div
+                  key={`card-${row.card.id}-${row.currency}`}
+                  className={cn(
+                    'flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between',
+                    row.isOverdue
+                      ? 'border-red-500/30 bg-red-500/10'
+                      : row.isDueSoon
+                        ? 'border-orange-500/30 bg-orange-500/10'
+                        : 'border-border/50 bg-card/50',
+                  )}
+                >
+                  <div className="flex items-start gap-3 min-w-0">
+                    <Checkbox
+                      checked={false}
+                      onCheckedChange={(checked) => checked && handleToggleCardPaid(row, true)}
+                      className="mt-1"
+                    />
+                    <div className="min-w-0">
+                      <p className="font-medium flex items-center gap-2">
+                        <CreditCard className="h-4 w-4 text-primary shrink-0" />
+                        {row.card.name} · {row.currency}
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              className="inline-flex text-muted-foreground hover:text-foreground"
+                              aria-label="Qué es este monto"
+                            >
+                              <CircleHelp className="h-3.5 w-3.5" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-xs text-left leading-snug">
+                            Total a pagar en {formatMonthLabel(monthKey)} (mes de vencimiento). No es
+                            el mes de la compra ni el del cierre: si el resumen vence en este mes, va
+                            acá.
+                          </TooltipContent>
+                        </Tooltip>
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        A pagar · vence {formatDueDateLabel(row.card.due_day, monthKey)}
+                      </p>
+                      <ul className="mt-2 space-y-0.5 text-xs text-muted-foreground">
+                        {row.lines.map((line) => (
+                          <li key={line.item.id}>
+                            · {line.item.name}
+                            {line.installmentLabel ? ` ${line.installmentLabel}` : ''} ·{' '}
+                            {formatCurrency(line.amount, row.currency)}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3 sm:justify-end">
+                    <div className="text-right">
+                      <p className="font-bold">{formatCurrency(row.amount, row.currency)}</p>
+                      <p className="text-xs text-muted-foreground">a pagar</p>
+                    </div>
+                    <span
+                      className={cn(
+                        'text-xs px-2 py-1 rounded shrink-0',
+                        row.isOverdue
+                          ? 'bg-red-500/20 text-red-400'
+                          : row.isDueSoon
+                            ? 'bg-orange-500/20 text-orange-400'
+                            : 'bg-muted text-muted-foreground',
+                      )}
+                    >
+                      {row.isOverdue ? 'Vencido' : row.isDueSoon ? 'Pronto' : 'Pendiente'}
+                    </span>
+                  </div>
+                </div>
+              ))}
+
               {pendingItems.map(({ expense, isOverdue, isDueSoon }) => (
                 <div
                   key={expense.id}
@@ -473,6 +706,14 @@ export function FixedExpensesView() {
                       <Button
                         variant="ghost"
                         size="icon"
+                        title="Archivar (conserva el historial)"
+                        onClick={() => handleArchive(expense.id)}
+                      >
+                        <Archive className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
                         onClick={() => handleOpenDelete(expense.id)}
                         className="text-red-400 hover:text-red-300"
                       >
@@ -496,12 +737,39 @@ export function FixedExpensesView() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {monthlyMovements.length === 0 ? (
+          {monthlyMovements.length === 0 && paidCards.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-6">
               Todavía no hay pagos registrados este mes. Marcá un gasto en la checklist para agregarlo acá.
             </p>
           ) : (
             <>
+              {paidCards.length > 0 && (
+                <div className="mb-4 space-y-2">
+                  {paidCards.map((row) => (
+                    <div
+                      key={`paid-card-${row.card.id}-${row.currency}`}
+                      className="flex items-center justify-between gap-3 rounded-xl border border-border/50 bg-background/40 p-4"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-semibold flex items-center gap-2">
+                          <CreditCard className="h-4 w-4 text-primary" />
+                          {row.card.name} · {row.currency}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Tarjeta · {formatCurrency(Number(row.payment!.amount_paid), row.currency)} ·{' '}
+                          {row.payment!.paid_at}
+                        </p>
+                      </div>
+                      <Checkbox
+                        checked
+                        onCheckedChange={(checked) => {
+                          if (!checked) handleToggleCardPaid(row, false)
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="space-y-3 md:hidden">
                 {monthlyMovements.map(({ expense, payment }) => (
                   <div
@@ -513,13 +781,25 @@ export function FixedExpensesView() {
                         <p className="font-semibold">{expense.name}</p>
                         <p className="text-xs text-muted-foreground">{expense.category}</p>
                       </div>
-                      <Checkbox
-                        checked
-                        onCheckedChange={(checked) => {
-                          if (!checked) handleUncheckMovement(expense)
-                        }}
-                        disabled={savingPaymentId === payment.id}
-                      />
+                      <div className="flex items-center gap-1">
+                        {expense.is_active !== false && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Archivar"
+                            onClick={() => handleArchive(expense.id)}
+                          >
+                            <Archive className="h-4 w-4" />
+                          </Button>
+                        )}
+                        <Checkbox
+                          checked
+                          onCheckedChange={(checked) => {
+                            if (!checked) handleUncheckMovement(expense)
+                          }}
+                          disabled={savingPaymentId === payment.id}
+                        />
+                      </div>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div className="space-y-1">
@@ -577,6 +857,7 @@ export function FixedExpensesView() {
                   <TableHead className="w-32">Monto</TableHead>
                   <TableHead className="w-36">Fecha</TableHead>
                   <TableHead>Notas</TableHead>
+                  <TableHead className="w-12" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -637,6 +918,18 @@ export function FixedExpensesView() {
                         disabled={savingPaymentId === payment.id}
                       />
                     </TableCell>
+                    <TableCell>
+                      {expense.is_active !== false && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title="Archivar (conserva el historial)"
+                          onClick={() => handleArchive(expense.id)}
+                        >
+                          <Archive className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -660,8 +953,41 @@ export function FixedExpensesView() {
       {/* Templates note */}
       <p className="text-xs text-muted-foreground flex items-center gap-2">
         <FileText className="h-3.5 w-3.5" />
-        Los gastos fijos son plantillas. Usá las flechas de arriba para ver meses anteriores.
+        Los gastos fijos son plantillas. Usá Archivar para sacarlos del checklist sin perder historial.
       </p>
+
+      {archivedFixedExpenses.length > 0 && (
+        <Card className="border-border/50 bg-card/50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Archive className="h-4 w-4 text-muted-foreground" />
+              Archivados
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <p className="mb-2 text-xs text-muted-foreground">
+              No salen en el checklist. Los pagos de meses anteriores se conservan.
+            </p>
+            {archivedFixedExpenses.map((expense) => (
+              <div
+                key={expense.id}
+                className="flex items-center justify-between gap-3 rounded-lg border border-border/40 px-3 py-2"
+              >
+                <div className="min-w-0">
+                  <p className="truncate font-medium text-muted-foreground">{expense.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {expense.category} · {formatCurrency(Number(expense.amount), expense.currency)}
+                  </p>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => handleRestore(expense.id)}>
+                  <ArchiveRestore className="mr-1.5 h-3.5 w-3.5" />
+                  Restaurar
+                </Button>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Create/Edit Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -769,9 +1095,11 @@ export function FixedExpensesView() {
           <DialogHeader>
             <DialogTitle>Registrar pago</DialogTitle>
             <DialogDescription>
-              {payingExpense
-                ? `${payingExpense.name} · ${formatMonthLabel(monthKey)}`
-                : 'Ingresá el monto que pagaste'}
+              {payingCard
+                ? `${payingCard.card.name} · ${payingCard.currency} · ${formatMonthLabel(monthKey)}`
+                : payingExpense
+                  ? `${payingExpense.name} · ${formatMonthLabel(monthKey)}`
+                  : 'Ingresá el monto que pagaste'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -784,6 +1112,11 @@ export function FixedExpensesView() {
                 placeholder="0"
                 autoFocus
               />
+              {payingCard && (
+                <p className="text-xs text-muted-foreground">
+                  A pagar: {formatCurrency(payingCard.amount, payingCard.currency)}
+                </p>
+              )}
               {payingExpense && (
                 <p className="text-xs text-muted-foreground">
                   Estimado: {formatCurrency(Number(payingExpense.amount), payingExpense.currency)}
@@ -827,7 +1160,8 @@ export function FixedExpensesView() {
           <AlertDialogHeader>
             <AlertDialogTitle>Eliminar Gasto Fijo</AlertDialogTitle>
             <AlertDialogDescription>
-              Se eliminará la plantilla y todo su historial de pagos. Esta acción no se puede deshacer.
+              Se eliminará la plantilla y todo su historial de pagos. Si solo querés sacarlo del
+              checklist, usá Archivar. Esta acción no se puede deshacer.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

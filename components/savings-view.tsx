@@ -6,6 +6,7 @@ import {
   ensureSystemWallets,
   useAccounts,
   useFixedExpensePayments,
+  useCardStatementPayments,
   useMonthlyIncomes,
   useTransactions,
   useTransfers,
@@ -36,11 +37,13 @@ export function SavingsView() {
   const { accounts, isLoading: loadingAccounts } = useAccounts()
   const { monthlyIncomes, isLoading: loadingIncomes } = useMonthlyIncomes()
   const { payments, isLoading: loadingPayments } = useFixedExpensePayments()
+  const { cardPayments, isLoading: loadingCardPayments } = useCardStatementPayments()
   const { transactions, isLoading: loadingTx } = useTransactions()
   const { transfers, isLoading: loadingTransfers } = useTransfers()
   const wallets = useMemo(
-    () => computeWalletTotals(accounts, transactions, transfers, payments, monthlyIncomes),
-    [accounts, transactions, transfers, payments, monthlyIncomes],
+    () =>
+      computeWalletTotals(accounts, transactions, transfers, payments, monthlyIncomes, cardPayments),
+    [accounts, transactions, transfers, payments, monthlyIncomes, cardPayments],
   )
   const [transferOpen, setTransferOpen] = useState(false)
   const [presetFrom, setPresetFrom] = useState<WalletSlot | null>(null)
@@ -73,7 +76,13 @@ export function SavingsView() {
     }
   }
 
-  const isLoading = loadingAccounts || loadingIncomes || loadingPayments || loadingTx || loadingTransfers
+  const isLoading =
+    loadingAccounts ||
+    loadingIncomes ||
+    loadingPayments ||
+    loadingCardPayments ||
+    loadingTx ||
+    loadingTransfers
 
   if (isLoading) {
     return (

@@ -7,6 +7,7 @@ import { TransactionsView } from '@/components/transactions-view'
 import { FixedExpensesView } from '@/components/fixed-expenses-view'
 import { IncomeSourcesView } from '@/components/income-sources-view'
 import { SavingsView } from '@/components/savings-view'
+import { CardsView } from '@/components/cards-view'
 import { ComparativesView } from '@/components/comparatives-view'
 import { QuickCashFab } from '@/components/quick-expense-fab'
 import { cn } from '@/lib/utils'
@@ -24,6 +25,7 @@ export default function DashboardPage() {
       view === 'transactions' ||
       view === 'fixed-expenses' ||
       view === 'savings' ||
+      view === 'cards' ||
       view === 'comparatives'
     ) {
       setActiveTab(view)
@@ -53,6 +55,8 @@ export default function DashboardPage() {
         return <IncomeSourcesView />
       case 'savings':
         return <SavingsView />
+      case 'cards':
+        return <CardsView />
       case 'comparatives':
         return <ComparativesView />
       default:
