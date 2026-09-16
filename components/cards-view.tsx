@@ -18,7 +18,7 @@ import {
   cardMonthTotal,
   installmentEndMonth,
 } from '@/lib/card-billing'
-import { formatCurrency, formatMonthLabel, toMonthKey } from '@/lib/utils'
+import { cn, formatCurrency, formatMonthLabel, toMonthKey } from '@/lib/utils'
 import { Card as UiCard, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -49,7 +49,8 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { Archive, ArchiveRestore, CircleHelp, CreditCard, Loader2, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { Archive, ArchiveRestore, ChevronDown, CircleHelp, CreditCard, Loader2, Pencil, Plus, Trash2 } from 'lucide-react'
 
 type ItemDialogMode = 'installment' | 'debit'
 
@@ -110,6 +111,7 @@ export function CardsView() {
   const [savingItem, setSavingItem] = useState(false)
   const [itemError, setItemError] = useState<string | null>(null)
   const [deletingItemId, setDeletingItemId] = useState<string | null>(null)
+  const [openCardIds, setOpenCardIds] = useState<Record<string, boolean>>({})
 
   const itemsByCard = useMemo(() => {
     const map = new Map<string, CardItem[]>()
@@ -316,195 +318,218 @@ export function CardsView() {
             const debits = items.filter((i) => i.kind === 'debit')
 
             return (
-              <UiCard key={card.id} className="border-border/50 bg-card/50">
-                <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-3">
-                  <div className="min-w-0">
-                    <CardTitle className="flex items-center gap-2 text-lg">
-                      <CreditCard className="h-5 w-5 shrink-0 text-primary" />
-                      <span className="truncate">{card.name}</span>
-                    </CardTitle>
-                    <p className="mt-1 flex flex-wrap items-center gap-x-1 text-xs text-muted-foreground">
-                      <LabelWithTip
-                        className="inline-flex items-center gap-1 text-xs font-normal text-muted-foreground"
-                        tip="Día en que vence el resumen y sale la plata del Disponible. No es el día de cierre."
+              <Collapsible
+                key={card.id}
+                open={openCardIds[card.id] === true}
+                onOpenChange={(open) =>
+                  setOpenCardIds((prev) => ({ ...prev, [card.id]: open }))
+                }
+              >
+                <UiCard className="border-border/50 bg-card/50">
+                  <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 p-0">
+                    <CollapsibleTrigger asChild>
+                      <button
+                        type="button"
+                        className="flex min-w-0 flex-1 items-start justify-between gap-3 p-6 pb-3 text-left"
                       >
-                        Vence día {card.due_day}
-                      </LabelWithTip>
-                      <span>· A pagar este mes:</span>{' '}
-                      {ars > 0 || usd > 0 ? (
-                        <>
-                          {ars > 0 && formatCurrency(ars, 'ARS')}
-                          {ars > 0 && usd > 0 && ' · '}
-                          {usd > 0 && formatCurrency(usd, 'USD')}
-                        </>
-                      ) : (
-                        'sin cargos'
-                      )}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 gap-1">
-                    <Button variant="ghost" size="icon" onClick={() => openEditCard(card)}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      title="Archivar (conserva el historial)"
-                      onClick={() => handleArchive(card.id)}
-                    >
-                      <Archive className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="text-red-500"
-                      onClick={() => setDeletingCardId(card.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => openItemDialog(card, 'installment')}
-                    >
-                      <Plus className="mr-1 h-3.5 w-3.5" />
-                      Compra en cuotas
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => openItemDialog(card, 'debit')}>
-                      <Plus className="mr-1 h-3.5 w-3.5" />
-                      Débito / suscripción
-                    </Button>
-                  </div>
-
-                  {monthLines.length > 0 && (
-                    <div className="rounded-xl border border-border/60 bg-muted/30 p-3">
-                      <p className="mb-2 flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                        <LabelWithTip
-                          className="inline-flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-muted-foreground"
-                          tip="Lo que figura acá es lo que pagás este mes al vencer el resumen, no el mes en que compraste."
-                        >
-                          A pagar · {formatMonthLabel(monthKey)}
-                        </LabelWithTip>
-                      </p>
-                      <ul className="space-y-1.5 text-sm">
-                        {monthLines.map((line) => (
-                          <li key={line.item.id} className="flex justify-between gap-3">
-                            <span className="min-w-0 truncate">
-                              {line.item.name}
-                              {line.installmentLabel ? ` · ${line.installmentLabel}` : ''}
-                            </span>
-                            <span className="shrink-0 font-medium">
-                              {formatCurrency(line.amount, line.item.currency)}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {installments.length > 0 && (
-                    <div>
-                      <p className="mb-2 text-xs font-medium text-muted-foreground">Cuotas</p>
-                      <ul className="space-y-2">
-                        {installments.map((item) => {
-                          const monthly = Number(item.amount) / (item.installments || 1)
-                          const end = installmentEndMonth(
-                            item.start_month_key,
-                            item.installments || 1,
-                          )
-                          return (
-                            <li
-                              key={item.id}
-                              className="flex items-start justify-between gap-2 rounded-lg border border-border/40 px-3 py-2"
+                        <div className="min-w-0">
+                          <CardTitle className="flex items-center gap-2 text-lg">
+                            <CreditCard className="h-5 w-5 shrink-0 text-primary" />
+                            <span className="truncate">{card.name}</span>
+                          </CardTitle>
+                          <p className="mt-1 flex flex-wrap items-center gap-x-1 text-xs text-muted-foreground">
+                            <LabelWithTip
+                              className="inline-flex items-center gap-1 text-xs font-normal text-muted-foreground"
+                              tip="Día en que vence el resumen y sale la plata del Disponible. No es el día de cierre."
                             >
-                              <div className="min-w-0">
-                                <p className="truncate font-medium">{item.name}</p>
-                                <p className="text-xs text-muted-foreground">
-                                  {formatCurrency(Number(item.amount), item.currency)} en{' '}
-                                  {item.installments} · {formatCurrency(monthly, item.currency)}
-                                  /mes · pago {formatMonthLabel(item.start_month_key)} →{' '}
-                                  {formatMonthLabel(end)}
-                                </p>
-                              </div>
-                              <div className="flex shrink-0">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => openItemDialog(card, 'installment', item)}
-                                >
-                                  <Pencil className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="text-red-500"
-                                  onClick={() => setDeletingItemId(item.id)}
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
-                            </li>
-                          )
-                        })}
-                      </ul>
+                              Vence día {card.due_day}
+                            </LabelWithTip>
+                            <span>· A pagar este mes:</span>{' '}
+                            {ars > 0 || usd > 0 ? (
+                              <>
+                                {ars > 0 && formatCurrency(ars, 'ARS')}
+                                {ars > 0 && usd > 0 && ' · '}
+                                {usd > 0 && formatCurrency(usd, 'USD')}
+                              </>
+                            ) : (
+                              'sin cargos'
+                            )}
+                          </p>
+                        </div>
+                        <ChevronDown
+                          className={cn(
+                            'mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform',
+                            openCardIds[card.id] && 'rotate-180',
+                          )}
+                        />
+                      </button>
+                    </CollapsibleTrigger>
+                    <div className="flex shrink-0 gap-1 py-4 pr-4">
+                      <Button variant="ghost" size="icon" onClick={() => openEditCard(card)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title="Archivar (conserva el historial)"
+                        onClick={() => handleArchive(card.id)}
+                      >
+                        <Archive className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-red-500"
+                        onClick={() => setDeletingCardId(card.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
-                  )}
+                  </CardHeader>
+                  <CollapsibleContent>
+                    <CardContent className="space-y-4 pt-0">
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openItemDialog(card, 'installment')}
+                        >
+                          <Plus className="mr-1 h-3.5 w-3.5" />
+                          Compra en cuotas
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => openItemDialog(card, 'debit')}>
+                          <Plus className="mr-1 h-3.5 w-3.5" />
+                          Débito / suscripción
+                        </Button>
+                      </div>
 
-                  {debits.length > 0 && (
-                    <div>
-                      <p className="mb-2 text-xs font-medium text-muted-foreground">
-                        Débitos / suscripciones
-                      </p>
-                      <ul className="space-y-2">
-                        {debits.map((item) => (
-                          <li
-                            key={item.id}
-                            className="flex items-start justify-between gap-2 rounded-lg border border-border/40 px-3 py-2"
-                          >
-                            <div className="min-w-0">
-                              <p className="truncate font-medium">{item.name}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {formatCurrency(Number(item.amount), item.currency)}/mes · pago desde{' '}
-                                {formatMonthLabel(item.start_month_key)}
-                                {item.end_month_key
-                                  ? ` · hasta ${formatMonthLabel(item.end_month_key)}`
-                                  : ' · sin fin'}
-                              </p>
-                            </div>
-                            <div className="flex shrink-0">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => openItemDialog(card, 'debit', item)}
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="text-red-500"
-                                onClick={() => setDeletingItemId(item.id)}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
+                      {monthLines.length > 0 && (
+                        <div className="rounded-xl border border-border/60 bg-muted/30 p-3">
+                          <p className="mb-2 flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                            <LabelWithTip
+                              className="inline-flex items-center gap-1 text-xs font-medium uppercase tracking-wide text-muted-foreground"
+                              tip="Lo que figura acá es lo que pagás este mes al vencer el resumen, no el mes en que compraste."
+                            >
+                              A pagar · {formatMonthLabel(monthKey)}
+                            </LabelWithTip>
+                          </p>
+                          <ul className="space-y-1.5 text-sm">
+                            {monthLines.map((line) => (
+                              <li key={line.item.id} className="flex justify-between gap-3">
+                                <span className="min-w-0 truncate">
+                                  {line.item.name}
+                                  {line.installmentLabel ? ` · ${line.installmentLabel}` : ''}
+                                </span>
+                                <span className="shrink-0 font-medium">
+                                  {formatCurrency(line.amount, line.item.currency)}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
 
-                  {items.length === 0 && (
-                    <p className="text-sm text-muted-foreground">
-                      Sin cuotas ni débitos todavía.
-                    </p>
-                  )}
-                </CardContent>
-              </UiCard>
+                      {installments.length > 0 && (
+                        <div>
+                          <p className="mb-2 text-xs font-medium text-muted-foreground">Cuotas</p>
+                          <ul className="space-y-2">
+                            {installments.map((item) => {
+                              const monthly = Number(item.amount) / (item.installments || 1)
+                              const end = installmentEndMonth(
+                                item.start_month_key,
+                                item.installments || 1,
+                              )
+                              return (
+                                <li
+                                  key={item.id}
+                                  className="flex items-start justify-between gap-2 rounded-lg border border-border/40 px-3 py-2"
+                                >
+                                  <div className="min-w-0">
+                                    <p className="truncate font-medium">{item.name}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {formatCurrency(Number(item.amount), item.currency)} en{' '}
+                                      {item.installments} · {formatCurrency(monthly, item.currency)}
+                                      /mes · pago {formatMonthLabel(item.start_month_key)} →{' '}
+                                      {formatMonthLabel(end)}
+                                    </p>
+                                  </div>
+                                  <div className="flex shrink-0">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => openItemDialog(card, 'installment', item)}
+                                    >
+                                      <Pencil className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="text-red-500"
+                                      onClick={() => setDeletingItemId(item.id)}
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </div>
+                                </li>
+                              )
+                            })}
+                          </ul>
+                        </div>
+                      )}
+
+                      {debits.length > 0 && (
+                        <div>
+                          <p className="mb-2 text-xs font-medium text-muted-foreground">
+                            Débitos / suscripciones
+                          </p>
+                          <ul className="space-y-2">
+                            {debits.map((item) => (
+                              <li
+                                key={item.id}
+                                className="flex items-start justify-between gap-2 rounded-lg border border-border/40 px-3 py-2"
+                              >
+                                <div className="min-w-0">
+                                  <p className="truncate font-medium">{item.name}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {formatCurrency(Number(item.amount), item.currency)}/mes · pago desde{' '}
+                                    {formatMonthLabel(item.start_month_key)}
+                                    {item.end_month_key
+                                      ? ` · hasta ${formatMonthLabel(item.end_month_key)}`
+                                      : ' · sin fin'}
+                                  </p>
+                                </div>
+                                <div className="flex shrink-0">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => openItemDialog(card, 'debit', item)}
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="text-red-500"
+                                    onClick={() => setDeletingItemId(item.id)}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {items.length === 0 && (
+                        <p className="text-sm text-muted-foreground">
+                          Sin cuotas ni débitos todavía.
+                        </p>
+                      )}
+                    </CardContent>
+                  </CollapsibleContent>
+                </UiCard>
+              </Collapsible>
             )
           })}
         </div>
