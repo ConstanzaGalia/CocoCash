@@ -71,6 +71,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import {
   Plus,
   Pencil,
@@ -81,11 +82,13 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Receipt,
   CreditCard,
   CircleHelp,
   Archive,
   ArchiveRestore,
+  Check,
 } from 'lucide-react'
 
 function formatCurrency(amount: number, currency: string) {
@@ -139,6 +142,9 @@ export function FixedExpensesView() {
   const [isSaving, setIsSaving] = useState(false)
   const [isPaying, setIsPaying] = useState(false)
   const [savingPaymentId, setSavingPaymentId] = useState<string | null>(null)
+  const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null)
+  const [pendingCardsOpen, setPendingCardsOpen] = useState(false)
+  const [paidCardsOpen, setPaidCardsOpen] = useState(false)
 
   const isLoading =
     loadingExpenses || loadingPayments || loadingCards || loadingCardItems || loadingCardPayments
@@ -204,6 +210,7 @@ export function FixedExpensesView() {
     today.setHours(0, 0, 0, 0)
 
     for (const card of cards) {
+      if (card.is_active === false) continue
       const items = cardItems.filter((item) => item.card_id === card.id)
       for (const currency of currenciesWithBalance(items, monthKey)) {
         const amount = cardMonthTotal(items, monthKey, currency)
@@ -573,80 +580,134 @@ export function FixedExpensesView() {
             </div>
           ) : (
             <div className="space-y-2">
-              {pendingCards.map((row) => (
-                <div
-                  key={`card-${row.card.id}-${row.currency}`}
-                  className={cn(
-                    'flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between',
-                    row.isOverdue
-                      ? 'border-red-500/30 bg-red-500/10'
-                      : row.isDueSoon
-                        ? 'border-orange-500/30 bg-orange-500/10'
-                        : 'border-border/50 bg-card/50',
-                  )}
-                >
-                  <div className="flex items-start gap-3 min-w-0">
-                    <Checkbox
-                      checked={false}
-                      onCheckedChange={(checked) => checked && handleToggleCardPaid(row, true)}
-                      className="mt-1"
-                    />
-                    <div className="min-w-0">
-                      <p className="font-medium flex items-center gap-2">
-                        <CreditCard className="h-4 w-4 text-primary shrink-0" />
-                        {row.card.name} · {row.currency}
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <button
-                              type="button"
-                              className="inline-flex text-muted-foreground hover:text-foreground"
-                              aria-label="Qué es este monto"
-                            >
-                              <CircleHelp className="h-3.5 w-3.5" />
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent side="top" className="max-w-xs text-left leading-snug">
-                            Total a pagar en {formatMonthLabel(monthKey)} (mes de vencimiento). No es
-                            el mes de la compra ni el del cierre: si el resumen vence en este mes, va
-                            acá.
-                          </TooltipContent>
-                        </Tooltip>
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        A pagar · vence {formatDueDateLabel(row.card.due_day, monthKey)}
-                      </p>
-                      <ul className="mt-2 space-y-0.5 text-xs text-muted-foreground">
-                        {row.lines.map((line) => (
-                          <li key={line.item.id}>
-                            · {line.item.name}
-                            {line.installmentLabel ? ` ${line.installmentLabel}` : ''} ·{' '}
-                            {formatCurrency(line.amount, row.currency)}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
+              {pendingCards.length > 0 && (
+                <Collapsible open={pendingCardsOpen} onOpenChange={setPendingCardsOpen}>
+                  <div className="rounded-lg border border-border/50 bg-card/50">
+                    <CollapsibleTrigger asChild>
+                      <button
+                        type="button"
+                        className="flex w-full items-center justify-between gap-3 p-4 text-left"
+                      >
+                        <div className="min-w-0">
+                          <p className="font-medium flex items-center gap-2">
+                            <CreditCard className="h-4 w-4 text-primary shrink-0" />
+                            Tarjetas
+                            <span className="text-xs font-normal text-muted-foreground">
+                              · {pendingCards.length} pendiente{pendingCards.length === 1 ? '' : 's'}
+                            </span>
+                          </p>
+                          <p className="mt-0.5 text-sm text-muted-foreground">
+                            {pendingCards
+                              .map((row) => formatCurrency(row.amount, row.currency))
+                              .join(' · ')}
+                          </p>
+                        </div>
+                        <ChevronDown
+                          className={cn(
+                            'h-4 w-4 shrink-0 text-muted-foreground transition-transform',
+                            pendingCardsOpen && 'rotate-180',
+                          )}
+                        />
+                      </button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <div className="space-y-2 border-t border-border/50 p-2">
+                        {pendingCards.map((row) => (
+                          <div
+                            key={`card-${row.card.id}-${row.currency}`}
+                            className={cn(
+                              'flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between',
+                              row.isOverdue
+                                ? 'border-red-500/30 bg-red-500/10'
+                                : row.isDueSoon
+                                  ? 'border-orange-500/30 bg-orange-500/10'
+                                  : 'border-border/40 bg-background/40',
+                            )}
+                          >
+                            <div className="flex items-start gap-3 min-w-0">
+                              <Checkbox
+                                checked={false}
+                                onCheckedChange={(checked) =>
+                                  checked && handleToggleCardPaid(row, true)
+                                }
+                                className="mt-1"
+                              />
+                              <div className="min-w-0">
+                                <p className="font-medium flex items-center gap-2">
+                                  {row.card.name} · {row.currency}
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <button
+                                        type="button"
+                                        className="inline-flex text-muted-foreground hover:text-foreground"
+                                        aria-label="Qué es este monto"
+                                      >
+                                        <CircleHelp className="h-3.5 w-3.5" />
+                                      </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent
+                                      side="top"
+                                      className="max-w-xs text-left leading-snug"
+                                    >
+                                      Total a pagar en {formatMonthLabel(monthKey)} (mes de
+                                      vencimiento). No es el mes de la compra ni el del cierre.
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </p>
+                                <p className="text-sm text-muted-foreground">
+                                  Vence {formatDueDateLabel(row.card.due_day, monthKey)}
+                                </p>
+                                <details className="mt-2">
+                                  <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                                    {row.lines.length} ítem{row.lines.length === 1 ? '' : 's'} · ver
+                                    desglose
+                                  </summary>
+                                  <ul className="mt-1.5 space-y-0.5 text-xs text-muted-foreground">
+                                    {row.lines.map((line) => (
+                                      <li key={line.item.id}>
+                                        · {line.item.name}
+                                        {line.installmentLabel
+                                          ? ` ${line.installmentLabel}`
+                                          : ''}{' '}
+                                        · {formatCurrency(line.amount, row.currency)}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </details>
+                              </div>
+                            </div>
 
-                  <div className="flex items-center justify-between gap-3 sm:justify-end">
-                    <div className="text-right">
-                      <p className="font-bold">{formatCurrency(row.amount, row.currency)}</p>
-                      <p className="text-xs text-muted-foreground">a pagar</p>
-                    </div>
-                    <span
-                      className={cn(
-                        'text-xs px-2 py-1 rounded shrink-0',
-                        row.isOverdue
-                          ? 'bg-red-500/20 text-red-400'
-                          : row.isDueSoon
-                            ? 'bg-orange-500/20 text-orange-400'
-                            : 'bg-muted text-muted-foreground',
-                      )}
-                    >
-                      {row.isOverdue ? 'Vencido' : row.isDueSoon ? 'Pronto' : 'Pendiente'}
-                    </span>
+                            <div className="flex items-center justify-between gap-3 sm:justify-end">
+                              <div className="text-right">
+                                <p className="font-bold">
+                                  {formatCurrency(row.amount, row.currency)}
+                                </p>
+                                <p className="text-xs text-muted-foreground">a pagar</p>
+                              </div>
+                              <span
+                                className={cn(
+                                  'text-xs px-2 py-1 rounded shrink-0',
+                                  row.isOverdue
+                                    ? 'bg-red-500/20 text-red-400'
+                                    : row.isDueSoon
+                                      ? 'bg-orange-500/20 text-orange-400'
+                                      : 'bg-muted text-muted-foreground',
+                                )}
+                              >
+                                {row.isOverdue
+                                  ? 'Vencido'
+                                  : row.isDueSoon
+                                    ? 'Pronto'
+                                    : 'Pendiente'}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </CollapsibleContent>
                   </div>
-                </div>
-              ))}
+                </Collapsible>
+              )}
 
               {pendingItems.map(({ expense, isOverdue, isDueSoon }) => (
                 <div
@@ -744,108 +805,187 @@ export function FixedExpensesView() {
           ) : (
             <>
               {paidCards.length > 0 && (
-                <div className="mb-4 space-y-2">
-                  {paidCards.map((row) => (
-                    <div
-                      key={`paid-card-${row.card.id}-${row.currency}`}
-                      className="flex items-center justify-between gap-3 rounded-xl border border-border/50 bg-background/40 p-4"
-                    >
-                      <div className="min-w-0">
-                        <p className="font-semibold flex items-center gap-2">
-                          <CreditCard className="h-4 w-4 text-primary" />
-                          {row.card.name} · {row.currency}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Tarjeta · {formatCurrency(Number(row.payment!.amount_paid), row.currency)} ·{' '}
-                          {row.payment!.paid_at}
-                        </p>
+                <Collapsible open={paidCardsOpen} onOpenChange={setPaidCardsOpen} className="mb-4">
+                  <div className="rounded-xl border border-border/50 bg-background/40">
+                    <CollapsibleTrigger asChild>
+                      <button
+                        type="button"
+                        className="flex w-full items-center justify-between gap-3 p-4 text-left"
+                      >
+                        <div className="min-w-0">
+                          <p className="font-semibold flex items-center gap-2">
+                            <CreditCard className="h-4 w-4 text-primary" />
+                            Tarjetas pagadas
+                            <span className="text-xs font-normal text-muted-foreground">
+                              · {paidCards.length}
+                            </span>
+                          </p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {paidCards
+                              .map((row) =>
+                                formatCurrency(Number(row.payment!.amount_paid), row.currency),
+                              )
+                              .join(' · ')}
+                          </p>
+                        </div>
+                        <ChevronDown
+                          className={cn(
+                            'h-4 w-4 shrink-0 text-muted-foreground transition-transform',
+                            paidCardsOpen && 'rotate-180',
+                          )}
+                        />
+                      </button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <div className="space-y-2 border-t border-border/50 p-2">
+                        {paidCards.map((row) => (
+                          <div
+                            key={`paid-card-${row.card.id}-${row.currency}`}
+                            className="flex items-center justify-between gap-3 rounded-lg border border-border/40 px-3 py-3"
+                          >
+                            <div className="min-w-0">
+                              <p className="font-medium">
+                                {row.card.name} · {row.currency}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {formatCurrency(Number(row.payment!.amount_paid), row.currency)} ·{' '}
+                                {row.payment!.paid_at}
+                              </p>
+                            </div>
+                            <Checkbox
+                              checked
+                              onCheckedChange={(checked) => {
+                                if (!checked) handleToggleCardPaid(row, false)
+                              }}
+                            />
+                          </div>
+                        ))}
                       </div>
-                      <Checkbox
-                        checked
-                        onCheckedChange={(checked) => {
-                          if (!checked) handleToggleCardPaid(row, false)
-                        }}
-                      />
-                    </div>
-                  ))}
-                </div>
+                    </CollapsibleContent>
+                  </div>
+                </Collapsible>
               )}
               <div className="space-y-3 md:hidden">
-                {monthlyMovements.map(({ expense, payment }) => (
-                  <div
-                    key={`${payment.id}-${payment.updated_at}`}
-                    className="space-y-3 rounded-xl border border-border/50 bg-background/40 p-4"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="font-semibold">{expense.name}</p>
-                        <p className="text-xs text-muted-foreground">{expense.category}</p>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        {expense.is_active !== false && (
+                {monthlyMovements.map(({ expense, payment }) => {
+                  const isEditing = editingPaymentId === payment.id
+                  const dateLabel = (() => {
+                    try {
+                      return new Date(`${payment.paid_at}T12:00:00`).toLocaleDateString('es-AR', {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                      })
+                    } catch {
+                      return payment.paid_at
+                    }
+                  })()
+                  return (
+                    <div
+                      key={`${payment.id}-${payment.updated_at}`}
+                      className="space-y-3 rounded-xl border border-border/50 bg-background/40 p-4"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-semibold">{expense.name}</p>
+                          <p className="text-xs text-muted-foreground">{expense.category}</p>
+                        </div>
+                        <div className="flex items-center gap-0.5 shrink-0">
+                          {expense.is_active !== false && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              title="Archivar"
+                              onClick={() => handleArchive(expense.id)}
+                            >
+                              <Archive className="h-4 w-4" />
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="icon"
-                            title="Archivar"
-                            onClick={() => handleArchive(expense.id)}
+                            title={isEditing ? 'Listo' : 'Editar'}
+                            onClick={() =>
+                              setEditingPaymentId(isEditing ? null : payment.id)
+                            }
                           >
-                            <Archive className="h-4 w-4" />
+                            {isEditing ? (
+                              <Check className="h-4 w-4 text-primary" />
+                            ) : (
+                              <Pencil className="h-4 w-4" />
+                            )}
                           </Button>
-                        )}
-                        <Checkbox
-                          checked
-                          onCheckedChange={(checked) => {
-                            if (!checked) handleUncheckMovement(expense)
-                          }}
-                          disabled={savingPaymentId === payment.id}
-                        />
+                          <Checkbox
+                            checked
+                            onCheckedChange={(checked) => {
+                              if (!checked) handleUncheckMovement(expense)
+                            }}
+                            disabled={savingPaymentId === payment.id}
+                          />
+                        </div>
                       </div>
+
+                      {isEditing ? (
+                        <>
+                          <div className="grid grid-cols-2 gap-2 min-w-0">
+                            <div className="space-y-1 min-w-0">
+                              <label className="text-xs text-muted-foreground">Monto</label>
+                              <Input
+                                type="number"
+                                defaultValue={Number(payment.amount_paid)}
+                                className="h-9 min-w-0"
+                                onBlur={(e) => {
+                                  const value = parseFloat(e.target.value) || 0
+                                  if (value !== Number(payment.amount_paid)) {
+                                    handleUpdateMovement(payment, { amount_paid: value })
+                                  }
+                                }}
+                                disabled={savingPaymentId === payment.id}
+                              />
+                            </div>
+                            <div className="space-y-1 min-w-0">
+                              <label className="text-xs text-muted-foreground">Fecha</label>
+                              <Input
+                                type="date"
+                                defaultValue={payment.paid_at}
+                                className="h-9 min-w-0 max-w-full"
+                                onBlur={(e) => {
+                                  if (e.target.value && e.target.value !== payment.paid_at) {
+                                    handleUpdateMovement(payment, { paid_at: e.target.value })
+                                  }
+                                }}
+                                disabled={savingPaymentId === payment.id}
+                              />
+                            </div>
+                          </div>
+                          <Input
+                            defaultValue={payment.notes ?? ''}
+                            placeholder="Notas"
+                            className="h-9"
+                            onBlur={(e) => {
+                              const value = e.target.value.trim() || null
+                              if (value !== (payment.notes ?? null)) {
+                                handleUpdateMovement(payment, { notes: value })
+                              }
+                            }}
+                            disabled={savingPaymentId === payment.id}
+                          />
+                        </>
+                      ) : (
+                        <div className="space-y-1 text-sm">
+                          <p className="font-medium">
+                            {formatCurrency(Number(payment.amount_paid), payment.currency)}
+                            <span className="ml-2 font-normal text-muted-foreground">
+                              · {dateLabel}
+                            </span>
+                          </p>
+                          {payment.notes ? (
+                            <p className="text-xs text-muted-foreground">{payment.notes}</p>
+                          ) : null}
+                        </div>
+                      )}
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-1">
-                        <label className="text-xs text-muted-foreground">Monto</label>
-                        <Input
-                          type="number"
-                          defaultValue={Number(payment.amount_paid)}
-                          className="h-9"
-                          onBlur={(e) => {
-                            const value = parseFloat(e.target.value) || 0
-                            if (value !== Number(payment.amount_paid)) {
-                              handleUpdateMovement(payment, { amount_paid: value })
-                            }
-                          }}
-                          disabled={savingPaymentId === payment.id}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-xs text-muted-foreground">Fecha</label>
-                        <Input
-                          type="date"
-                          defaultValue={payment.paid_at}
-                          className="h-9"
-                          onBlur={(e) => {
-                            if (e.target.value && e.target.value !== payment.paid_at) {
-                              handleUpdateMovement(payment, { paid_at: e.target.value })
-                            }
-                          }}
-                          disabled={savingPaymentId === payment.id}
-                        />
-                      </div>
-                    </div>
-                    <Input
-                      defaultValue={payment.notes ?? ''}
-                      placeholder="Notas"
-                      className="h-9"
-                      onBlur={(e) => {
-                        const value = e.target.value.trim() || null
-                        if (value !== (payment.notes ?? null)) {
-                          handleUpdateMovement(payment, { notes: value })
-                        }
-                      }}
-                      disabled={savingPaymentId === payment.id}
-                    />
-                  </div>
-                ))}
+                  )
+                })}
               </div>
               <div className="hidden overflow-x-auto md:block">
             <Table>

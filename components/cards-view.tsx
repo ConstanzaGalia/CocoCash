@@ -6,6 +6,7 @@ import {
   createCardItem,
   deleteCard,
   deleteCardItem,
+  setCardActive,
   updateCard,
   updateCardItem,
   useCardItems,
@@ -48,7 +49,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { CircleHelp, CreditCard, Loader2, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Archive, ArchiveRestore, CircleHelp, CreditCard, Loader2, Pencil, Plus, Trash2 } from 'lucide-react'
 
 type ItemDialogMode = 'installment' | 'debit'
 
@@ -119,6 +120,31 @@ export function CardsView() {
     }
     return map
   }, [cardItems])
+
+  const activeCards = useMemo(
+    () => cards.filter((card) => card.is_active !== false),
+    [cards],
+  )
+  const archivedCards = useMemo(
+    () => cards.filter((card) => card.is_active === false),
+    [cards],
+  )
+
+  const handleArchive = async (id: string) => {
+    try {
+      await setCardActive(id, false)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'No se pudo archivar')
+    }
+  }
+
+  const handleRestore = async (id: string) => {
+    try {
+      await setCardActive(id, true)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'No se pudo restaurar')
+    }
+  }
 
   const openCreateCard = () => {
     setEditingCard(null)
@@ -264,21 +290,24 @@ export function CardsView() {
       {cardsError && (
         <UiCard className="border-amber-500/30 bg-amber-500/10">
           <CardContent className="py-4 text-sm">
-            Ejecutá en Supabase <code className="text-xs">scripts/007_cards.sql</code> para crear
+            Ejecutá en Supabase <code className="text-xs">scripts/007_cards.sql</code> y{' '}
+            <code className="text-xs">scripts/009_archive_cards.sql</code> para crear
             las tablas de tarjetas.
           </CardContent>
         </UiCard>
       )}
 
-      {cards.length === 0 && !cardsError ? (
+      {activeCards.length === 0 && !cardsError ? (
         <UiCard className="border-border/50">
           <CardContent className="py-10 text-center text-sm text-muted-foreground">
-            Todavía no hay tarjetas. Creá una (solo el nombre) y cargá cuotas o débitos.
+            {archivedCards.length > 0
+              ? 'No hay tarjetas activas. Restaurá una archivada o creá una nueva.'
+              : 'Todavía no hay tarjetas. Creá una (solo el nombre) y cargá cuotas o débitos.'}
           </CardContent>
         </UiCard>
       ) : (
         <div className="space-y-4">
-          {cards.map((card) => {
+          {activeCards.map((card) => {
             const items = itemsByCard.get(card.id) || []
             const monthLines = cardItemsForMonth(items, monthKey)
             const ars = cardMonthTotal(items, monthKey, 'ARS')
@@ -316,6 +345,14 @@ export function CardsView() {
                   <div className="flex shrink-0 gap-1">
                     <Button variant="ghost" size="icon" onClick={() => openEditCard(card)}>
                       <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      title="Archivar (conserva el historial)"
+                      onClick={() => handleArchive(card.id)}
+                    >
+                      <Archive className="h-4 w-4" />
                     </Button>
                     <Button
                       variant="ghost"
@@ -473,6 +510,49 @@ export function CardsView() {
         </div>
       )}
 
+      {archivedCards.length > 0 && (
+        <UiCard className="border-border/50 bg-card/50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Archive className="h-4 w-4 text-muted-foreground" />
+              Archivadas
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <p className="mb-2 text-xs text-muted-foreground">
+              No aparecen en Fijos ni en la lista activa. Cuotas, débitos y pagos se conservan.
+            </p>
+            {archivedCards.map((card) => (
+              <div
+                key={card.id}
+                className="flex items-center justify-between gap-3 rounded-lg border border-border/40 px-3 py-2"
+              >
+                <div className="min-w-0">
+                  <p className="truncate font-medium text-muted-foreground">{card.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Vence el día {card.due_day}
+                  </p>
+                </div>
+                <div className="flex shrink-0 gap-1">
+                  <Button variant="outline" size="sm" onClick={() => handleRestore(card.id)}>
+                    <ArchiveRestore className="mr-1.5 h-3.5 w-3.5" />
+                    Restaurar
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-red-500"
+                    onClick={() => setDeletingCardId(card.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </UiCard>
+      )}
+
       <Dialog open={cardDialogOpen} onOpenChange={setCardDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -542,8 +622,8 @@ export function CardsView() {
                 placeholder={itemDialog?.mode === 'installment' ? 'Sillón' : 'Netflix'}
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
+            <div className="grid grid-cols-[1fr_auto] gap-3">
+              <div className="min-w-0 space-y-2">
                 <label className="text-sm font-medium">
                   {itemDialog?.mode === 'installment' ? 'Total' : 'Monto mensual'}
                 </label>
@@ -552,15 +632,16 @@ export function CardsView() {
                   inputMode="decimal"
                   value={itemAmount}
                   onChange={(e) => setItemAmount(e.target.value)}
+                  className="min-w-0"
                 />
               </div>
-              <div className="space-y-2">
+              <div className="w-[5.5rem] space-y-2">
                 <label className="text-sm font-medium">Moneda</label>
                 <Select
                   value={itemCurrency}
                   onValueChange={(v: Currency) => setItemCurrency(v)}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -570,53 +651,58 @@ export function CardsView() {
                 </Select>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <LabelWithTip
+                tip={
+                  itemDialog?.mode === 'installment'
+                    ? 'Mes en que pagás la 1ª cuota (vencimiento del resumen), no el mes de la compra. Si compraste en abril y la 1/6 vence en mayo, poné mayo.'
+                    : 'Primer mes en que ese débito sale en el resumen que pagás.'
+                }
+              >
+                {itemDialog?.mode === 'installment' ? 'Mes 1ª cuota' : 'Desde (pago)'}
+              </LabelWithTip>
+              <Input
+                type="month"
+                value={itemStart}
+                onChange={(e) => setItemStart(e.target.value)}
+                className="w-full min-w-0"
+              />
+            </div>
+            {itemDialog?.mode === 'installment' ? (
               <div className="space-y-2">
-                <LabelWithTip
-                  tip={
-                    itemDialog?.mode === 'installment'
-                      ? 'Mes en que pagás la 1ª cuota (vencimiento del resumen), no el mes de la compra. Si compraste en abril y la 1/6 vence en mayo, poné mayo.'
-                      : 'Primer mes en que ese débito sale en el resumen que pagás.'
-                  }
-                >
-                  {itemDialog?.mode === 'installment' ? 'Mes 1ª cuota' : 'Desde (pago)'}
+                <label className="text-sm font-medium">Cuotas</label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={itemInstallments}
+                  onChange={(e) => setItemInstallments(e.target.value)}
+                  className="w-full sm:max-w-[8rem]"
+                />
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <LabelWithTip tip="Último mes de pago inclusive. Vacío = sigue siempre. Para dar de baja Netflix en abril, poné hasta marzo.">
+                  Hasta (pago)
                 </LabelWithTip>
                 <Input
                   type="month"
-                  value={itemStart}
-                  onChange={(e) => setItemStart(e.target.value)}
+                  value={itemEnd}
+                  onChange={(e) => setItemEnd(e.target.value)}
+                  className="w-full min-w-0"
                 />
               </div>
-              {itemDialog?.mode === 'installment' ? (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Cuotas</label>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={itemInstallments}
-                    onChange={(e) => setItemInstallments(e.target.value)}
-                  />
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <LabelWithTip tip="Último mes de pago inclusive. Vacío = sigue siempre. Para dar de baja Netflix en abril, poné hasta marzo.">
-                    Hasta (pago)
-                  </LabelWithTip>
-                  <Input
-                    type="month"
-                    value={itemEnd}
-                    onChange={(e) => setItemEnd(e.target.value)}
-                  />
-                </div>
-              )}
-            </div>
+            )}
             {itemError && <p className="text-sm text-red-500">{itemError}</p>}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setItemDialog(null)}>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="outline" onClick={() => setItemDialog(null)} className="w-full sm:w-auto">
               Cancelar
             </Button>
-            <Button onClick={handleSaveItem} disabled={savingItem} className="bg-primary hover:bg-primary/90">
+            <Button
+              onClick={handleSaveItem}
+              disabled={savingItem}
+              className="w-full bg-primary hover:bg-primary/90 sm:w-auto"
+            >
               {savingItem && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Guardar
             </Button>
@@ -629,7 +715,7 @@ export function CardsView() {
           <AlertDialogHeader>
             <AlertDialogTitle>Eliminar tarjeta</AlertDialogTitle>
             <AlertDialogDescription>
-              Se borran cuotas, débitos y pagos de resumen asociados.
+              Se borran cuotas, débitos y pagos de resumen. Si solo querés dejar de usarla, archivála.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

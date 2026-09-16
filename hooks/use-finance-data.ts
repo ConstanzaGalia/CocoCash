@@ -163,7 +163,10 @@ async function fetchTransfers(): Promise<Transfer[]> {
 async function fetchCards(): Promise<Card[]> {
   const { data, error } = await supabase.from('cards').select('*').order('created_at', { ascending: true })
   if (error) throw error
-  return data || []
+  return (data || []).map((card) => ({
+    ...card,
+    is_active: card.is_active !== false,
+  }))
 }
 
 async function fetchCardItems(): Promise<CardItem[]> {
@@ -952,6 +955,7 @@ export async function createCard(input: { name: string; due_day: number }) {
       user_id: userId,
       name: input.name.trim(),
       due_day: input.due_day,
+      is_active: true,
     })
     .select()
     .single()
@@ -959,22 +963,37 @@ export async function createCard(input: { name: string; due_day: number }) {
     if (error.code === '42P01' || error.message?.includes('does not exist')) {
       throw new Error('Ejecutá en Supabase scripts/007_cards.sql')
     }
+    if (error.message?.includes('is_active') || error.code === 'PGRST204') {
+      throw new Error('Ejecutá en Supabase scripts/009_archive_cards.sql')
+    }
     throw error
   }
   mutate('cards')
   return data as Card
 }
 
-export async function updateCard(id: string, input: Partial<Pick<Card, 'name' | 'due_day'>>) {
+export async function updateCard(
+  id: string,
+  input: Partial<Pick<Card, 'name' | 'due_day' | 'is_active'>>,
+) {
   const { data, error } = await supabase
     .from('cards')
     .update({ ...input, updated_at: new Date().toISOString() })
     .eq('id', id)
     .select()
     .single()
-  if (error) throw error
+  if (error) {
+    if (error.message?.includes('is_active') || error.code === 'PGRST204') {
+      throw new Error('Ejecutá en Supabase scripts/009_archive_cards.sql')
+    }
+    throw error
+  }
   mutate('cards')
   return data as Card
+}
+
+export async function setCardActive(id: string, isActive: boolean) {
+  return updateCard(id, { is_active: isActive })
 }
 
 export async function deleteCard(id: string) {

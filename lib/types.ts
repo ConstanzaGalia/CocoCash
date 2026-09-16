@@ -85,6 +85,8 @@ export interface Card {
   user_id: string
   name: string
   due_day: number
+  /** false = archivada: no sale en Fijos ni en la lista activa. */
+  is_active: boolean
   created_at: string
   updated_at: string
 }
