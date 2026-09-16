@@ -15,7 +15,7 @@ import type {
   Transfer,
 } from '@/lib/types'
 import { computeWalletTotals } from '@/lib/budget-flow'
-import { toMonthKey } from '@/lib/utils'
+import { dateToMonthKey, toMonthKey } from '@/lib/utils'
 import useSWR, { mutate } from 'swr'
 
 const supabase = createClient()
@@ -662,6 +662,77 @@ export async function deleteMonthlyIncome(id: string) {
 
   const { error } = await supabase.from('monthly_incomes').delete().eq('id', id)
   if (error) throw error
+  mutate('monthly_incomes')
+}
+
+/** Edita un cobro: fuente, monto, fecha y nota; sincroniza cuenta y monthly_incomes. */
+export async function updateIncomeCobro(
+  transactionId: string,
+  input: {
+    income_source_id: string
+    amount: number
+    date: string
+    description?: string | null
+  },
+) {
+  const amount = Number(input.amount)
+  if (amount <= 0) throw new Error('El monto tiene que ser mayor a 0')
+
+  const { data: source, error: sourceError } = await supabase
+    .from('income_sources')
+    .select('*')
+    .eq('id', input.income_source_id)
+    .single()
+  if (sourceError) throw sourceError
+
+  const wallet = await getWallet('available', source.currency as Currency)
+  const monthKey = dateToMonthKey(input.date)
+  const notes = input.description?.trim() || null
+
+  await updateTransaction(transactionId, {
+    type: 'income',
+    amount,
+    currency: source.currency as Currency,
+    category: source.name,
+    description: notes || source.name,
+    date: input.date,
+    account_id: wallet.id,
+    is_paid: true,
+  })
+
+  const { data: cobro, error: cobroFetchError } = await supabase
+    .from('monthly_incomes')
+    .select('*')
+    .eq('transaction_id', transactionId)
+    .maybeSingle()
+  if (cobroFetchError) throw cobroFetchError
+
+  if (cobro?.id) {
+    const { error } = await supabase
+      .from('monthly_incomes')
+      .update({
+        income_source_id: input.income_source_id,
+        month_key: monthKey,
+        amount,
+        currency: source.currency,
+        account_id: wallet.id,
+      })
+      .eq('id', cobro.id)
+    if (error) throw error
+  } else {
+    const userId = await requireUserId()
+    const { error } = await supabase.from('monthly_incomes').insert({
+      user_id: userId,
+      income_source_id: input.income_source_id,
+      month_key: monthKey,
+      amount,
+      currency: source.currency,
+      account_id: wallet.id,
+      transaction_id: transactionId,
+    })
+    if (error) throw error
+  }
+
   mutate('monthly_incomes')
 }
 

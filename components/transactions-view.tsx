@@ -5,8 +5,11 @@ import {
   deleteTransaction,
   deleteTransfer,
   getWallet,
+  updateIncomeCobro,
   updateTransaction,
   useAccounts,
+  useIncomeSources,
+  useMonthlyIncomes,
   useTransactions,
   useTransfers,
   walletName,
@@ -62,7 +65,14 @@ interface ExpenseFormData {
   currency: 'ARS' | 'USD'
 }
 
-const initialFormData: ExpenseFormData = {
+interface IncomeFormData {
+  amount: string
+  income_source_id: string
+  date: string
+  description: string
+}
+
+const initialExpenseForm: ExpenseFormData = {
   amount: '',
   category: 'Comida',
   date: new Date().toISOString().split('T')[0],
@@ -70,23 +80,52 @@ const initialFormData: ExpenseFormData = {
   currency: 'ARS',
 }
 
+const initialIncomeForm: IncomeFormData = {
+  amount: '',
+  income_source_id: '',
+  date: new Date().toISOString().split('T')[0],
+  description: '',
+}
+
 export function TransactionsView() {
   const { transactions, isLoading: loadingTx } = useTransactions()
   const { transfers, isLoading: loadingTransfers } = useTransfers()
   const { accounts } = useAccounts()
+  const { incomeSources } = useIncomeSources()
+  const { monthlyIncomes } = useMonthlyIncomes()
   const [filter, setFilter] = useState<Filter>('all')
   const currentMonthKey = toMonthKey()
   const [monthKey, setMonthKey] = useState(currentMonthKey)
   const isCurrentMonth = monthKey === currentMonthKey
-  const [editingTx, setEditingTx] = useState<Transaction | null>(null)
-  const [formData, setFormData] = useState<ExpenseFormData>(initialFormData)
+  const [editingExpense, setEditingExpense] = useState<Transaction | null>(null)
+  const [editingIncome, setEditingIncome] = useState<Transaction | null>(null)
+  const [expenseForm, setExpenseForm] = useState<ExpenseFormData>(initialExpenseForm)
+  const [incomeForm, setIncomeForm] = useState<IncomeFormData>(initialIncomeForm)
   const [isSaving, setIsSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<{ type: 'tx' | 'transfer'; id: string } | null>(null)
+
+  const activeSources = useMemo(
+    () => incomeSources.filter((source) => source.is_active).sort((a, b) => a.sort_order - b.sort_order),
+    [incomeSources],
+  )
+
+  const selectedIncomeSource = activeSources.find((s) => s.id === incomeForm.income_source_id)
+    || incomeSources.find((s) => s.id === incomeForm.income_source_id)
 
   const accountName = (id: string) => {
     const account = accounts.find((item) => item.id === id)
     if (!account) return 'Bolsillo'
     return walletName(account.kind || 'available', account.currency)
+  }
+
+  const sourceNameForTx = (tx: Transaction) => {
+    const cobro = monthlyIncomes.find((income) => income.transaction_id === tx.id)
+    if (cobro) {
+      const source = incomeSources.find((item) => item.id === cobro.income_source_id)
+      if (source) return source.name
+    }
+    return tx.category
   }
 
   const items = useMemo<CashItem[]>(() => {
@@ -121,9 +160,27 @@ export function TransactionsView() {
   )
 
   const handleOpenEdit = (tx: Transaction) => {
-    if (tx.type !== 'expense') return
-    setEditingTx(tx)
-    setFormData({
+    setSaveError(null)
+    if (tx.type === 'income') {
+      const cobro = monthlyIncomes.find((income) => income.transaction_id === tx.id)
+      const matchedByName = incomeSources.find(
+        (source) => source.name === tx.category && source.currency === tx.currency,
+      )
+      const sourceId = cobro?.income_source_id || matchedByName?.id || activeSources[0]?.id || ''
+      const note =
+        tx.description && tx.description !== tx.category ? tx.description : ''
+      setEditingIncome(tx)
+      setIncomeForm({
+        amount: tx.amount.toString(),
+        income_source_id: sourceId,
+        date: tx.date.split('T')[0],
+        description: note,
+      })
+      return
+    }
+
+    setEditingExpense(tx)
+    setExpenseForm({
       amount: tx.amount.toString(),
       category: tx.category,
       date: tx.date.split('T')[0],
@@ -132,23 +189,43 @@ export function TransactionsView() {
     })
   }
 
-  const handleSubmit = async () => {
-    if (!editingTx) return
+  const handleSubmitExpense = async () => {
+    if (!editingExpense) return
     setIsSaving(true)
+    setSaveError(null)
     try {
-      const wallet = await getWallet('available', formData.currency)
-      await updateTransaction(editingTx.id, {
-        amount: parseFloat(formData.amount) || 0,
-        category: formData.category,
-        date: formData.date,
-        description: formData.description || null,
-        currency: formData.currency,
+      const wallet = await getWallet('available', expenseForm.currency)
+      await updateTransaction(editingExpense.id, {
+        amount: parseFloat(expenseForm.amount) || 0,
+        category: expenseForm.category,
+        date: expenseForm.date,
+        description: expenseForm.description || null,
+        currency: expenseForm.currency,
         type: 'expense',
         account_id: wallet.id,
       })
-      setEditingTx(null)
+      setEditingExpense(null)
     } catch (error) {
-      console.error('Error saving transaction:', error)
+      setSaveError(error instanceof Error ? error.message : 'No se pudo guardar')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleSubmitIncome = async () => {
+    if (!editingIncome || !incomeForm.income_source_id) return
+    setIsSaving(true)
+    setSaveError(null)
+    try {
+      await updateIncomeCobro(editingIncome.id, {
+        income_source_id: incomeForm.income_source_id,
+        amount: parseFloat(incomeForm.amount.replace(',', '.')) || 0,
+        date: incomeForm.date,
+        description: incomeForm.description.trim() || null,
+      })
+      setEditingIncome(null)
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'No se pudo guardar el cobro')
     } finally {
       setIsSaving(false)
     }
@@ -289,6 +366,7 @@ export function TransactionsView() {
 
                 const { tx } = item
                 const isIncome = tx.type === 'income'
+                const label = isIncome ? sourceNameForTx(tx) : tx.category
                 return (
                   <div
                     key={`tx-${item.id}`}
@@ -302,7 +380,13 @@ export function TransactionsView() {
                           ) : (
                             <ArrowDownRight className="h-4 w-4 shrink-0 text-red-400" />
                           )}
-                          <p className="font-medium truncate">{tx.description || tx.category}</p>
+                          <p className="font-medium truncate">
+                            {isIncome
+                              ? tx.description && tx.description !== label
+                                ? `${label} · ${tx.description}`
+                                : label
+                              : tx.description || tx.category}
+                          </p>
                         </div>
                         <p className="mt-1 text-xs text-muted-foreground">
                           {isIncome ? 'Cobro' : tx.category} ·{' '}
@@ -320,11 +404,9 @@ export function TransactionsView() {
                       </p>
                     </div>
                     <div className="mt-3 flex justify-end gap-1">
-                      {!isIncome && (
-                        <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(tx)}>
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                      )}
+                      <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(tx)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -342,7 +424,7 @@ export function TransactionsView() {
         </CardContent>
       </Card>
 
-      <Dialog open={Boolean(editingTx)} onOpenChange={(open) => !open && setEditingTx(null)}>
+      <Dialog open={Boolean(editingExpense)} onOpenChange={(open) => !open && setEditingExpense(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Editar gasto</DialogTitle>
@@ -351,8 +433,8 @@ export function TransactionsView() {
             <div className="space-y-2">
               <label className="text-sm font-medium">Descripción</label>
               <Input
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                value={expenseForm.description}
+                onChange={(e) => setExpenseForm({ ...expenseForm, description: e.target.value })}
                 placeholder="Ej: supermercado"
               />
             </div>
@@ -361,15 +443,15 @@ export function TransactionsView() {
                 <label className="text-sm font-medium">Monto</label>
                 <Input
                   type="number"
-                  value={formData.amount}
-                  onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                  value={expenseForm.amount}
+                  onChange={(e) => setExpenseForm({ ...expenseForm, amount: e.target.value })}
                 />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Moneda</label>
                 <Select
-                  value={formData.currency}
-                  onValueChange={(value: 'ARS' | 'USD') => setFormData({ ...formData, currency: value })}
+                  value={expenseForm.currency}
+                  onValueChange={(value: 'ARS' | 'USD') => setExpenseForm({ ...expenseForm, currency: value })}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -385,8 +467,8 @@ export function TransactionsView() {
               <div className="space-y-2">
                 <label className="text-sm font-medium">Categoría</label>
                 <CategoryPicker
-                  value={formData.category}
-                  onChange={(value) => setFormData({ ...formData, category: value })}
+                  value={expenseForm.category}
+                  onChange={(value) => setExpenseForm({ ...expenseForm, category: value })}
                   options={categoryOptions}
                 />
               </div>
@@ -394,19 +476,94 @@ export function TransactionsView() {
                 <label className="text-sm font-medium">Fecha</label>
                 <Input
                   type="date"
-                  value={formData.date}
-                  onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                  value={expenseForm.date}
+                  onChange={(e) => setExpenseForm({ ...expenseForm, date: e.target.value })}
                 />
               </div>
             </div>
+            {saveError && <p className="text-sm text-red-500">{saveError}</p>}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingTx(null)}>
+            <Button variant="outline" onClick={() => setEditingExpense(null)}>
               Cancelar
             </Button>
             <Button
-              onClick={handleSubmit}
-              disabled={!formData.amount || isSaving}
+              onClick={handleSubmitExpense}
+              disabled={!expenseForm.amount || isSaving}
+              className="bg-primary hover:bg-primary/90"
+            >
+              {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+              Guardar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(editingIncome)} onOpenChange={(open) => !open && setEditingIncome(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar cobro</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Fuente</label>
+              <Select
+                value={incomeForm.income_source_id}
+                onValueChange={(value) => setIncomeForm({ ...incomeForm, income_source_id: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Elegí la fuente" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(activeSources.length > 0 ? activeSources : incomeSources).map((source) => (
+                    <SelectItem key={source.id} value={source.id}>
+                      {source.name} · {source.currency}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedIncomeSource && (
+                <p className="text-xs text-muted-foreground">
+                  Se acredita en Disponible {selectedIncomeSource.currency}
+                </p>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Monto</label>
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  value={incomeForm.amount}
+                  onChange={(e) => setIncomeForm({ ...incomeForm, amount: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Fecha</label>
+                <Input
+                  type="date"
+                  value={incomeForm.date}
+                  onChange={(e) => setIncomeForm({ ...incomeForm, date: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Nota (opcional)</label>
+              <Input
+                value={incomeForm.description}
+                onChange={(e) => setIncomeForm({ ...incomeForm, description: e.target.value })}
+                placeholder="Ej: primera quincena"
+              />
+            </div>
+            {saveError && <p className="text-sm text-red-500">{saveError}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingIncome(null)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSubmitIncome}
+              disabled={!incomeForm.amount || !incomeForm.income_source_id || isSaving}
               className="bg-primary hover:bg-primary/90"
             >
               {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
