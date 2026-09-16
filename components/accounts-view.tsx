@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input'
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -480,6 +481,11 @@ export function AccountsView() {
             <DialogTitle>
               {editingAccount ? 'Editar Cuenta' : 'Nueva Cuenta'}
             </DialogTitle>
+            <DialogDescription>
+              {editingAccount
+                ? 'Actualizá los datos de la cuenta.'
+                : 'Creá una cuenta para registrar movimientos.'}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">

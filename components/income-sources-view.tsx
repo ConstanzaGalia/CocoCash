@@ -350,6 +350,7 @@ export function IncomeSourcesView() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Renombrar fuente</DialogTitle>
+            <DialogDescription>Cambia el nombre de esta fuente de ingreso.</DialogDescription>
           </DialogHeader>
           <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
           <DialogFooter>

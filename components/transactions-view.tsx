@@ -27,6 +27,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
 import {
@@ -428,6 +429,7 @@ export function TransactionsView() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Editar gasto</DialogTitle>
+            <DialogDescription>Modificá monto, categoría o fecha del gasto.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
@@ -503,6 +505,7 @@ export function TransactionsView() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Editar cobro</DialogTitle>
+            <DialogDescription>Podés cambiar la fuente, el monto o la fecha del cobro.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
