@@ -10,15 +10,18 @@ import {
   updateCard,
   updateCardItem,
   useCardItems,
+  useCardStatementPayments,
   useCards,
 } from '@/hooks/use-finance-data'
 import type { Card, CardItem, Currency } from '@/lib/types'
 import {
   cardItemsForMonth,
   cardMonthTotal,
+  currenciesWithBalance,
   installmentEndMonth,
 } from '@/lib/card-billing'
-import { cn, formatCurrency, formatMonthLabel, toMonthKey } from '@/lib/utils'
+import { cn, formatCurrency, formatMonthLabel, shiftMonthKey, toMonthKey } from '@/lib/utils'
+import { MonthPicker } from '@/components/month-picker'
 import { Card as UiCard, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -68,13 +71,15 @@ function LabelWithTip({
       {children}
       <Tooltip>
         <TooltipTrigger asChild>
-          <button
-            type="button"
-            className="inline-flex text-muted-foreground hover:text-foreground"
+          <span
+            role="img"
             aria-label="Más info"
+            className="inline-flex text-muted-foreground hover:text-foreground"
+            onClick={(event) => event.stopPropagation()}
+            onPointerDown={(event) => event.stopPropagation()}
           >
             <CircleHelp className="h-3.5 w-3.5" />
-          </button>
+          </span>
         </TooltipTrigger>
         <TooltipContent side="top" className="max-w-xs text-left leading-snug">
           {tip}
@@ -87,7 +92,11 @@ function LabelWithTip({
 export function CardsView() {
   const { cards, isLoading: loadingCards, error: cardsError } = useCards()
   const { cardItems, isLoading: loadingItems } = useCardItems()
-  const monthKey = toMonthKey()
+  const { cardPayments, isLoading: loadingCardPayments } = useCardStatementPayments()
+  const currentMonthKey = toMonthKey()
+  const [monthKey, setMonthKey] = useState(currentMonthKey)
+  const isCurrentMonth = monthKey === currentMonthKey
+  const futureMaxMonthKey = shiftMonthKey(currentMonthKey, 18)
 
   const [cardDialogOpen, setCardDialogOpen] = useState(false)
   const [editingCard, setEditingCard] = useState<Card | null>(null)
@@ -131,6 +140,33 @@ export function CardsView() {
     () => cards.filter((card) => card.is_active === false),
     [cards],
   )
+
+  const paymentsByCard = useMemo(() => {
+    const map = new Map<string, boolean>()
+    for (const payment of cardPayments) {
+      if (payment.month_key === monthKey) {
+        map.set(`${payment.card_id}:${payment.currency}`, true)
+      }
+    }
+    return map
+  }, [cardPayments, monthKey])
+
+  const isCardPaidForMonth = (cardId: string, items: CardItem[]) => {
+    const currencies = currenciesWithBalance(items, monthKey)
+    if (currencies.length === 0) return false
+    return currencies.every((currency) => paymentsByCard.get(`${cardId}:${currency}`))
+  }
+
+  const monthTotals = useMemo(() => {
+    let ars = 0
+    let usd = 0
+    for (const card of activeCards) {
+      const items = itemsByCard.get(card.id) || []
+      ars += cardMonthTotal(items, monthKey, 'ARS')
+      usd += cardMonthTotal(items, monthKey, 'USD')
+    }
+    return { ars, usd }
+  }, [activeCards, itemsByCard, monthKey])
 
   const handleArchive = async (id: string) => {
     try {
@@ -248,7 +284,7 @@ export function CardsView() {
     }
   }
 
-  if (loadingCards || loadingItems) {
+  if (loadingCards || loadingItems || loadingCardPayments) {
     return (
       <div className="space-y-6">
         <Skeleton className="h-8 w-48" />
@@ -280,13 +316,27 @@ export function CardsView() {
             </Tooltip>
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Cuotas y débitos · total del mes en Fijos
+            {isCurrentMonth
+              ? 'Cuotas y débitos · total del mes en Fijos'
+              : `A pagar en ${formatMonthLabel(monthKey)} (proyección)`}
           </p>
+          {!isCurrentMonth && (
+            <button
+              type="button"
+              className="mt-1 text-xs text-primary hover:underline"
+              onClick={() => setMonthKey(currentMonthKey)}
+            >
+              Volver al mes actual
+            </button>
+          )}
         </div>
-        <Button onClick={openCreateCard} className="bg-primary hover:bg-primary/90">
-          <Plus className="mr-2 h-4 w-4" />
-          Nueva tarjeta
-        </Button>
+        <div className="flex flex-col gap-2 sm:items-end">
+          <MonthPicker value={monthKey} onChange={setMonthKey} max={futureMaxMonthKey} />
+          <Button onClick={openCreateCard} className="bg-primary hover:bg-primary/90">
+            <Plus className="mr-2 h-4 w-4" />
+            Nueva tarjeta
+          </Button>
+        </div>
       </div>
 
       {cardsError && (
@@ -309,6 +359,25 @@ export function CardsView() {
         </UiCard>
       ) : (
         <div className="space-y-4">
+          {(monthTotals.ars > 0 || monthTotals.usd > 0) && (
+            <UiCard className="border-border/50 bg-card/50">
+              <CardContent className="flex flex-col gap-1 py-4 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">
+                    Total {isCurrentMonth ? 'este mes' : formatMonthLabel(monthKey)}
+                  </p>
+                  <p className="text-2xl font-bold tracking-tight">
+                    {monthTotals.ars > 0 && formatCurrency(monthTotals.ars, 'ARS')}
+                    {monthTotals.ars > 0 && monthTotals.usd > 0 && ' · '}
+                    {monthTotals.usd > 0 && formatCurrency(monthTotals.usd, 'USD')}
+                  </p>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Suma de cuotas y débitos a vencer
+                </p>
+              </CardContent>
+            </UiCard>
+          )}
           {activeCards.map((card) => {
             const items = itemsByCard.get(card.id) || []
             const monthLines = cardItemsForMonth(items, monthKey)
@@ -316,6 +385,14 @@ export function CardsView() {
             const usd = cardMonthTotal(items, monthKey, 'USD')
             const installments = items.filter((i) => i.kind === 'installment')
             const debits = items.filter((i) => i.kind === 'debit')
+            const isPaid = isCardPaidForMonth(card.id, items)
+            const monthLabel = isCurrentMonth ? 'este mes' : formatMonthLabel(monthKey)
+            const statusLabel =
+              ars > 0 || usd > 0
+                ? isPaid
+                  ? `Pagado ${monthLabel}`
+                  : `A pagar ${monthLabel}`
+                : null
 
             return (
               <Collapsible
@@ -344,15 +421,15 @@ export function CardsView() {
                             >
                               Vence día {card.due_day}
                             </LabelWithTip>
-                            <span>· A pagar este mes:</span>{' '}
-                            {ars > 0 || usd > 0 ? (
+                            <span>
+                              · {statusLabel ? `${statusLabel}:` : 'sin cargos'}
+                            </span>{' '}
+                            {statusLabel && (
                               <>
                                 {ars > 0 && formatCurrency(ars, 'ARS')}
                                 {ars > 0 && usd > 0 && ' · '}
                                 {usd > 0 && formatCurrency(usd, 'USD')}
                               </>
-                            ) : (
-                              'sin cargos'
                             )}
                           </p>
                         </div>

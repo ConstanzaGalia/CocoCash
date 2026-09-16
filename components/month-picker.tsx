@@ -37,8 +37,10 @@ export function MonthPicker({ value, onChange, max, yearsBack = 6 }: MonthPicker
   const currentKey = toMonthKey()
   const maxKey = max ?? currentKey
   const [yearStr, monthStr] = value.split('-')
+  const currentYear = Number(currentKey.slice(0, 4))
   const maxYear = Number(maxKey.slice(0, 4))
-  const years = Array.from({ length: yearsBack + 1 }, (_, index) => String(maxYear - yearsBack + index))
+  const minYear = Math.min(currentYear, maxYear) - yearsBack
+  const years = Array.from({ length: maxYear - minYear + 1 }, (_, index) => String(minYear + index))
 
   const clamp = (next: string) => (next > maxKey ? maxKey : next)
 
@@ -79,7 +81,7 @@ export function MonthPicker({ value, onChange, max, yearsBack = 6 }: MonthPicker
         </SelectTrigger>
         <SelectContent>
           {years.map((year) => (
-            <SelectItem key={year} value={year}>
+            <SelectItem key={year} value={year} disabled={year > String(maxYear)}>
               {year}
             </SelectItem>
           ))}
