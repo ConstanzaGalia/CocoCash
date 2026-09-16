@@ -208,7 +208,7 @@ export function IncomeSourcesView() {
         <div>
           <h1 className="text-2xl font-bold text-foreground md:text-3xl">Fuentes de ingreso</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Acá armás Sueldo STP, Sueldo FW, extras. Los cobros se cargan con el + y se ven en Movimientos.
+            Acá armás tus fuentes de ingreso, extras, etc. Los cobros se cargan con el + y se ven en Movimientos.
           </p>
           {!isCurrentMonth && (
             <button

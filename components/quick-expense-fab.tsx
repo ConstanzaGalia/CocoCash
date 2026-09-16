@@ -191,7 +191,7 @@ export function QuickCashFab() {
                 <label className="text-sm font-medium">De qué fuente</label>
                 {activeSources.length === 0 ? (
                   <p className="text-sm text-amber-400">
-                    Primero creá una fuente en Ingresos (Sueldo STP, Sueldo FW, etc.).
+                    Primero creá una fuente en Ingresos.
                   </p>
                 ) : (
                   <div className="flex flex-wrap gap-2">
