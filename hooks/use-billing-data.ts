@@ -204,10 +204,3 @@ export async function markInvoicePaid(input: {
   }
   mutate('billing_invoices')
 }
-
-export async function resendBillingInvoice(id: string) {
-  const res = await fetch(`/api/billing/invoices/${id}/resend`, { method: 'POST' })
-  const body = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(body.error || 'No se pudo reenviar el mail')
-  mutate('billing_invoices')
-}

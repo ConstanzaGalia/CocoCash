@@ -36,7 +36,7 @@ export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname
   const isAuthRoute = pathname.startsWith('/auth')
   // Crons de cobranzas: sin sesión, se autentican con CRON_SECRET dentro de cada ruta
-  const isCronRoute = ['/api/billing/run', '/api/billing/remind', '/api/billing/usage'].includes(pathname)
+  const isCronRoute = ['/api/billing/run', '/api/billing/reconcile', '/api/billing/usage'].includes(pathname)
   const isPublicRoute =
     pathname === '/' ||
     isCronRoute ||

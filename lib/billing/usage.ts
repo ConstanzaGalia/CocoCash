@@ -1,5 +1,4 @@
 import type { createAdminClient } from '@/lib/supabase/admin'
-import { sendOwnerUsageAlert } from '@/lib/billing/email'
 import { loadActiveClients, loadPlansById } from '@/lib/billing/invoices'
 import { errorMessage } from '@/lib/billing/shared'
 
@@ -27,7 +26,7 @@ async function fetchDatabaseSizeMb(projectRef: string) {
 export async function measureUsage(admin: Admin, userId: string, dry: boolean) {
   const [clients, plans] = await Promise.all([loadActiveClients(admin, userId), loadPlansById(admin, userId)])
   const results: { client: string; diskMb?: number; limitMb?: number | null; over?: boolean; error?: string }[] = []
-  const over: { name: string; plan: string | null; diskMb: number; limitMb: number }[] = []
+  const over: { name: string }[] = []
 
   for (const client of clients) {
     if (!client.supabase_project_ref) continue
@@ -43,7 +42,7 @@ export async function measureUsage(admin: Admin, userId: string, dry: boolean) {
     }
 
     const overDisk = diskMb != null && limitMb != null && diskMb > limitMb
-    if (overDisk) over.push({ name: client.name, plan: plan?.name ?? null, diskMb: diskMb!, limitMb: limitMb! })
+    if (overDisk) over.push({ name: client.name })
     results.push({
       client: client.name,
       diskMb: diskMb ?? undefined,
@@ -66,18 +65,7 @@ export async function measureUsage(admin: Admin, userId: string, dry: boolean) {
     }
   }
 
-  let alertSent = false
-  let alertError: string | undefined
-  if (over.length > 0 && !dry) {
-    try {
-      await sendOwnerUsageAlert(over)
-      alertSent = true
-    } catch (e) {
-      alertError = errorMessage(e)
-    }
-  }
-
-  return { results, over: over.map((o) => o.name), alertSent, alertError }
+  return { results, over: over.map((o) => o.name) }
 }
 
 /** Consulta mínima a la base propia para que el proyecto gratuito no se pause por inactividad. */

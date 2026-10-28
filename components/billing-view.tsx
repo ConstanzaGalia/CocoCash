@@ -7,7 +7,6 @@ import {
   createBillingClient,
   createBillingPlan,
   markInvoicePaid,
-  resendBillingInvoice,
   updateBillingClient,
   updateBillingPlan,
   useBillingAccess,
@@ -45,7 +44,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Archive, Ban, CheckCircle2, Loader2, Mail, MessageCircle, Pencil, Plus, RotateCcw } from 'lucide-react'
+import { Archive, Ban, CheckCircle2, Loader2, MessageCircle, Pencil, Plus, RotateCcw } from 'lucide-react'
 
 type DisplayStatus = 'draft' | 'sent' | 'overdue' | 'paid' | 'void'
 
@@ -542,7 +541,7 @@ function ExtraChargeDialog({
         <DialogHeader>
           <DialogTitle>Cargo extra · {clientName}</DialogTitle>
           <DialogDescription>
-            Se suma al detalle y al total de la liquidación. Si ya se envió, usá “Reenviar mail” para avisar el cambio.
+            Se suma al detalle y al total de la liquidación. Si ya le avisaste, mandale de nuevo el recordatorio por WhatsApp.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
@@ -787,9 +786,6 @@ export function BillingView() {
                       <TableRow key={invoice.id}>
                         <TableCell className="font-medium">
                           {clientName}
-                          {invoice.send_error && (
-                            <p className="text-[11px] font-normal text-red-500">Mail no enviado: {invoice.send_error}</p>
-                          )}
                         </TableCell>
                         <TableCell className="capitalize">{formatMonthLabel(invoice.month_key)}</TableCell>
                         <TableCell className="text-right">
@@ -835,18 +831,6 @@ export function BillingView() {
                                 }}
                               >
                                 <MessageCircle className="h-4 w-4 text-green-500" />
-                              </Button>
-                            )}
-                            {invoice.status === 'sent' && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                title="Reenviar mail"
-                                disabled={busy}
-                                onClick={() => run(invoice.id, () => resendBillingInvoice(invoice.id), 'Mail reenviado')}
-                              >
-                                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
                               </Button>
                             )}
                             {open && (
@@ -921,7 +905,6 @@ export function BillingView() {
                     <TableRow key={client.id} className={client.is_active ? '' : 'opacity-60'}>
                       <TableCell className="font-medium">
                         {client.name}
-                        {!client.email && <p className="text-[11px] font-normal text-amber-500">Sin email</p>}
                       </TableCell>
                       <TableCell>{plan?.name ?? '—'}</TableCell>
                       <TableCell className="text-right">
