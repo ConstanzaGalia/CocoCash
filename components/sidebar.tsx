@@ -17,6 +17,7 @@ import {
   PieChart,
   TrendingUp,
   CreditCard,
+  Briefcase,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Logo } from '@/components/logo'
@@ -26,6 +27,8 @@ interface SidebarProps {
   activeTab: string
   onTabChange: (tab: string) => void
   userEmail?: string
+  /** Cobranzas solo se muestra a la dueña del módulo. */
+  showBilling?: boolean
 }
 
 const navItems = [
@@ -36,12 +39,14 @@ const navItems = [
   { id: 'fixed-expenses', label: 'Fijos', icon: FileText, mobileNav: true },
   { id: 'transactions', label: 'Movimientos', icon: Receipt, mobileNav: true },
   { id: 'comparatives', label: 'Comparativas', icon: PieChart, mobileNav: false },
+  { id: 'billing', label: 'Cobranzas', icon: Briefcase, mobileNav: false },
 ]
 
-export function Sidebar({ activeTab, onTabChange, userEmail }: SidebarProps) {
+export function Sidebar({ activeTab, onTabChange, userEmail, showBilling = false }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const router = useRouter()
+  const visibleItems = navItems.filter((item) => item.id !== 'billing' || showBilling)
 
   const handleLogout = async () => {
     const supabase = createClient()
@@ -105,7 +110,7 @@ export function Sidebar({ activeTab, onTabChange, userEmail }: SidebarProps) {
 
           {/* Navigation */}
           <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-            {navItems.map((item) => {
+            {visibleItems.map((item) => {
               const Icon = item.icon
               const isActive = activeTab === item.id
               return (
@@ -180,7 +185,7 @@ export function Sidebar({ activeTab, onTabChange, userEmail }: SidebarProps) {
       {/* Mobile Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-sidebar-border bg-sidebar pb-[env(safe-area-inset-bottom)] md:hidden">
         <div className="flex items-stretch">
-          {navItems.filter((item) => item.mobileNav).map((item) => {
+          {visibleItems.filter((item) => item.mobileNav).map((item) => {
             const Icon = item.icon
             const isActive = activeTab === item.id
             return (

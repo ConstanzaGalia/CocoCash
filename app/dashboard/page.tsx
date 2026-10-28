@@ -8,14 +8,17 @@ import { FixedExpensesView } from '@/components/fixed-expenses-view'
 import { IncomeSourcesView } from '@/components/income-sources-view'
 import { SavingsView } from '@/components/savings-view'
 import { CardsView } from '@/components/cards-view'
+import { BillingView } from '@/components/billing-view'
 import { ComparativesView } from '@/components/comparatives-view'
 import { QuickCashFab } from '@/components/quick-expense-fab'
+import { useBillingAccess } from '@/hooks/use-billing-data'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 
 export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState('dashboard')
   const [userEmail, setUserEmail] = useState<string>()
+  const { allowed: canSeeBilling } = useBillingAccess()
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -26,7 +29,8 @@ export default function DashboardPage() {
       view === 'fixed-expenses' ||
       view === 'savings' ||
       view === 'cards' ||
-      view === 'comparatives'
+      view === 'comparatives' ||
+      view === 'billing'
     ) {
       setActiveTab(view)
     }
@@ -59,6 +63,8 @@ export default function DashboardPage() {
         return <CardsView />
       case 'comparatives':
         return <ComparativesView />
+      case 'billing':
+        return canSeeBilling ? <BillingView /> : <Dashboard onNavigate={setActiveTab} />
       default:
         return <Dashboard onNavigate={setActiveTab} />
     }
@@ -66,7 +72,7 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} userEmail={userEmail} />
+      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} userEmail={userEmail} showBilling={canSeeBilling} />
       <main
         className={cn(
           'transition-all duration-300 px-4 pt-[calc(4.5rem+var(--safe-top))] pb-36 md:ml-64 md:px-8 md:pt-8 md:pb-8',

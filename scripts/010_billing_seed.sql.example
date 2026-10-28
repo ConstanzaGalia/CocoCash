@@ -1,0 +1,34 @@
+-- Datos iniciales de cobranzas. Copiá este archivo, completá los TODO y ejecutalo a mano.
+-- El id de abajo es el de la dueña (auth.users); es el mismo que va en BILLING_OWNER_USER_ID.
+-- Los TODO numéricos están en 0 a propósito: no cobrar nada hasta que los completes.
+
+WITH owner AS (SELECT '2e5d18fa-66c2-41f7-8c0a-c1e414f2b65d'::uuid AS id),
+plans AS (
+  INSERT INTO public.billing_plans (user_id, name, monthly_amount, currency, disk_limit_mb, egress_limit_gb)
+  SELECT owner.id, p.name, p.amount, 'ARS', p.disk_mb, p.egress_gb
+  FROM owner,
+    (VALUES
+      ('Básico', 0::numeric, NULL::int, NULL::int),  -- TODO monto y tope de disco (MB)
+      ('Medio',  0::numeric, NULL::int, NULL::int),  -- TODO
+      ('Alto',   0::numeric, NULL::int, NULL::int)   -- TODO
+    ) AS p(name, amount, disk_mb, egress_gb)
+  RETURNING id, name
+)
+INSERT INTO public.billing_clients
+  (user_id, name, plan_id, supabase_org_id, supabase_project_ref, paid_until_month_key)
+SELECT
+  owner.id,
+  c.name,
+  (SELECT id FROM plans WHERE plans.name = c.plan_name),
+  c.org,
+  c.project_ref,
+  c.paid_until
+FROM owner,
+  (VALUES
+    ('overejeria-charo-ecommerce', 'Básico', 'CocoSoft', 'epiostlpxpslqxqvgnio', NULL),
+    ('yeye-ecommerse',             'Básico', 'CocoSoft', 'sabrxhzdgxwdjsgxexlj', NULL),
+    ('subcomision-hocket-tltc',    'Básico', 'CocoSoft', 'zvhtxfqtmisojqpdifog', NULL),
+    ('TODO cliente sin base',      'Básico', NULL,       NULL,                   '2026-12'),
+    ('Mora Gastronomía',           'Básico', 'TODO org de Mora', 'TODO ref',     NULL)
+  ) AS c(name, plan_name, org, project_ref, paid_until);
+-- Después, en la app: Cobranzas > Clientes, completá email, plan y monto de cada uno.

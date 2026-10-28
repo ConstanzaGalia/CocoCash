@@ -197,6 +197,102 @@ export interface Profile {
   updated_at: string
 }
 
+export interface BillingPlan {
+  id: string
+  user_id: string
+  name: string
+  monthly_amount: number
+  /** Componente en dólares, se convierte a ARS con la cotización del día. 0 = sin componente. */
+  usd_amount: number
+  currency: Currency
+  disk_limit_mb: number | null
+  egress_limit_gb: number | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface BillingClient {
+  id: string
+  user_id: string
+  name: string
+  email: string | null
+  whatsapp: string | null
+  plan_id: string | null
+  /** Si es null se usa el monto del plan. */
+  monthly_amount_override: number | null
+  /** null = usa el USD del plan. */
+  usd_amount_override: number | null
+  currency: Currency
+  supabase_org_id: string | null
+  /** null = el cliente no tiene base. */
+  supabase_project_ref: string | null
+  billing_day: number
+  due_days: number
+  paid_until_month_key: string | null
+  is_active: boolean
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+/** 'overdue' no se guarda: se calcula con status 'sent' y due_date < hoy. */
+export type BillingInvoiceStatus = 'draft' | 'sent' | 'paid' | 'void'
+export type BillingPaymentMethod = 'transfer' | 'mercadopago' | 'prepaid' | 'other'
+
+export interface BillingLineItem {
+  concept: string
+  amount: number
+}
+
+export interface BillingInvoice {
+  id: string
+  user_id: string
+  client_id: string
+  month_key: string
+  amount: number
+  currency: Currency
+  status: BillingInvoiceStatus
+  due_date: string
+  sent_at: string | null
+  send_error: string | null
+  paid_at: string | null
+  paid_amount: number | null
+  payment_method: BillingPaymentMethod | null
+  account_id: string | null
+  transaction_id: string | null
+  line_items: BillingLineItem[]
+  /** Parte en USD ya convertida dentro del total, con la cotización usada. */
+  usd_amount: number | null
+  fx_rate: number | null
+  fx_source: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface BillingReminder {
+  id: string
+  user_id: string
+  invoice_id: string | null
+  client_id: string | null
+  kind: string
+  channel: string
+  sent_at: string
+}
+
+export interface BillingUsageSnapshot {
+  id: string
+  user_id: string
+  client_id: string
+  captured_at: string
+  disk_mb: number | null
+  egress_gb: number | null
+  over_disk: boolean
+  over_egress: boolean
+  error: string | null
+}
+
 export type View =
   | 'dashboard'
   | 'transactions'
@@ -204,6 +300,7 @@ export type View =
   | 'income'
   | 'savings'
   | 'comparatives'
+  | 'billing'
 
 export const CATEGORIES = {
   expense: [
